@@ -734,7 +734,7 @@ public void OnClientDisconnect(int client)
 		strcopy(leaver_64, sizeof(leaver_64), dels[1]);
 		wsSendMatchCancel(dels, stayer_64, arena);
 	}
-	//remember to kill connect timers btw
+	KillTimer(mmConnectTimers[arena]);
     }
 
     if (g_hWelcomeTimer[client] != null)
@@ -4934,7 +4934,7 @@ public Action Timer_StartDuel(Handle timer, any arena_index)
 
 	//MGEME
 	KillTimer(mmConnectTimers[arena_index], false);
-	//TODO: Send signal to web server that game has started
+	wsSendMatchBegan(mmMatches[arena_index]);
 }
 
 public Action Timer_ResetPlayer(Handle timer, int userid)
@@ -6092,7 +6092,7 @@ public void wsSendMatchResults(char winner[50], char loser[50], bool finished)
 	delete msg;
 }
 
-public void wsSendMatchBegan(char[] players)
+public void wsSendMatchBegan(char players[2][50])
 {
 	JSONObject msg = new JSONObject();
 	msg.SetString("type", "MatchBegan");
