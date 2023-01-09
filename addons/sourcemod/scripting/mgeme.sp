@@ -291,7 +291,7 @@ public Plugin myinfo =
     author      = "Originally by Lange & Cprice; based on kAmmomod by Krolus - maintained by sappho.io, PepperKick, and others",
     description = "Duel mod for TF2 with realistic game situations.; Websocket server edition for use with mge_me by CaptainZidgel",
     version     =  PL_VERSION,
-    url         = "https://github.com/sapphonie/MGEMod"
+    url         = "https://github.com/captainzidgel/mgeme_sm"
 }
 /*
 ** ------------------------------------------------------------------
@@ -494,7 +494,6 @@ public void OnAllPluginsLoaded()
 public void OnPluginEnd()
 {
 	ws.Close();
-	//Websocket_Close(wsHandle);
 }
 
 /* OnMapStart()
@@ -682,16 +681,28 @@ public void OnClientPostAdminCheck(int client)
 	}
 	//GetPlayerFromSteamID(); //why did i add this to my code? am i stupid (yes)
 	
+	bool found = false;
 	for (int i = 1; i < MAXARENAS; i++) {
 		char p1[50], p2[50];
 		strcopy(p1, sizeof(p1), mmMatches[i][0]); //copy the mmMatches vals into p1/p2 strings so we can compare for each arena
 		strcopy(p2, sizeof(p2), mmMatches[i][1]);
-		PrintToServer("%s / %s // // // // // // // // // // ", p1, p2);
 		if (StrEqual(p1, sidBuf) || StrEqual(p2, sidBuf)) { //if player is in this arena
 			AddInQueue(client, i);
 			PrintToServer("Adding player (%i : %s) to arena %i", client, sidBuf, i);
+			found = true;
 			break;
 		}	
+	}
+	if (!found) {
+		char steamid[64];
+		GetClientAuthId(client, AuthId_Steam2, steamid, sizeof(steamid));
+		int aid = FindAdminByIdentity("steam", steamid);
+		if (aid == INVALID_ADMIN_ID) {
+			KickClient(client, "This server operates for MGEME; You must be in a match to join this server");
+			PrintToServer("Kicking player %s for not being in a match", sidBuf);
+		} else {
+			PrintToServer("Permitting connection by non-matched admin %s", sidBuf);
+		}
 	}
 }
 
@@ -702,122 +713,29 @@ public void OnClientPostAdminCheck(int client)
 * -------------------------------------------------------------------------- */
 public void OnClientDisconnect(int client)
 {
-    // We ignore the kick queue check for this function only so that clients that get kicked still get their elo calculated
-    if (IsValidClient(client, true) && g_iPlayerArena[client])
-    {
-        RemoveFromQueue(client, true);
-    }
-    else
-    {
-        int
-            arena_index = g_iPlayerArena[client],
-            player_slot = g_iPlayerSlot[client],
-            after_leaver_slot = player_slot + 1,
-            foe_slot = (player_slot == SLOT_ONE || player_slot == SLOT_THREE) ? SLOT_TWO : SLOT_ONE,
-            foe = g_iArenaQueue[arena_index][foe_slot];
+	int leaver = client;
+    if (g_iPlayerArena[client]) {
+	int leaver_slot = g_iPlayerSlot[client];
+	int arena = g_iPlayerArena[client];
+	int leaver_score = g_iArenaScore[arena][leaver_slot];
+	int stayer_slot = leaver_slot == SLOT_ONE ? SLOT_TWO : SLOT_ONE;
+	int stayer = g_iArenaQueue[arena][stayer_slot];
+	int stayer_score = g_iArenaScore[arena][stayer_slot];
+	
+	char stayer_64[50], leaver_64[50];
+	GetClientAuthId(stayer, AuthId_SteamID64, stayer_64, sizeof(stayer_64));
+	GetClientAuthId(leaver, AuthId_SteamID64, leaver_64, sizeof(leaver_64));
 
-        //Turn all this logic into a helper meathod
-        int player_teammate, foe2;
-
-        if (g_bFourPersonArena[arena_index])
-        {
-            player_teammate = getTeammate(client, player_slot, arena_index);
-            foe2 = getTeammate(foe, foe_slot, arena_index);
-        }
-
-        g_iPlayerArena[client] = 0;
-        g_iPlayerSlot[client] = 0;
-        g_iArenaQueue[arena_index][player_slot] = 0;
-        g_iPlayerHandicap[client] = 0;
-
-        if (g_bFourPersonArena[arena_index])
-        {
-            if (g_iArenaQueue[arena_index][SLOT_FOUR + 1])
-            {
-                int next_client = g_iArenaQueue[arena_index][SLOT_FOUR + 1];
-                g_iArenaQueue[arena_index][SLOT_FOUR + 1] = 0;
-                g_iArenaQueue[arena_index][player_slot] = next_client;
-                g_iPlayerSlot[next_client] = player_slot;
-                after_leaver_slot = SLOT_FOUR + 2;
-                char playername[MAX_NAME_LENGTH];
-                CreateTimer(2.0, Timer_StartDuel, arena_index);
-                GetClientName(next_client, playername, sizeof(playername));
-
-                if (!g_bNoStats && !g_bNoDisplayRating)
-                    MC_PrintToChatAll("%t", "JoinsArena", playername, g_iPlayerRating[next_client], g_sArenaName[arena_index]);
-                else
-                    MC_PrintToChatAll("%t", "JoinsArenaNoStats", playername, g_sArenaName[arena_index]);
-
-
-            } else {
-
-                if (foe && IsFakeClient(foe))
-                {
-                    ConVar cvar = FindConVar("tf_bot_quota");
-                    int quota = cvar.IntValue;
-                    ServerCommand("tf_bot_quota %d", quota - 1);
-                }
-
-                if (foe2 && IsFakeClient(foe2))
-                {
-                    ConVar cvar = FindConVar("tf_bot_quota");
-                    int quota = cvar.IntValue;
-                    ServerCommand("tf_bot_quota %d", quota - 1);
-                }
-
-                if (player_teammate && IsFakeClient(player_teammate))
-                {
-                    ConVar cvar = FindConVar("tf_bot_quota");
-                    int quota = cvar.IntValue;
-                    ServerCommand("tf_bot_quota %d", quota - 1);
-                }
-
-                g_iArenaStatus[arena_index] = AS_IDLE;
-                return;
-            }
-        }
-        else
-        {
-            if (g_iArenaQueue[arena_index][SLOT_TWO + 1])
-            {
-                int next_client = g_iArenaQueue[arena_index][SLOT_TWO + 1];
-                g_iArenaQueue[arena_index][SLOT_TWO + 1] = 0;
-                g_iArenaQueue[arena_index][player_slot] = next_client;
-                g_iPlayerSlot[next_client] = player_slot;
-                after_leaver_slot = SLOT_TWO + 2;
-                char playername[MAX_NAME_LENGTH];
-                CreateTimer(2.0, Timer_StartDuel, arena_index);
-                GetClientName(next_client, playername, sizeof(playername));
-
-                if (!g_bNoStats && !g_bNoDisplayRating)
-                    MC_PrintToChatAll("%t", "JoinsArena", playername, g_iPlayerRating[next_client], g_sArenaName[arena_index]);
-                else
-                    MC_PrintToChatAll("%t", "JoinsArenaNoStats", playername, g_sArenaName[arena_index]);
-
-
-            } else {
-                if (foe && IsFakeClient(foe))
-                {
-                    ConVar cvar = FindConVar("tf_bot_quota");
-                    int quota = cvar.IntValue;
-                    ServerCommand("tf_bot_quota %d", quota - 1);
-                }
-
-                g_iArenaStatus[arena_index] = AS_IDLE;
-                return;
-            }
-        }
-
-        if (g_iArenaQueue[arena_index][after_leaver_slot])
-        {
-            while (g_iArenaQueue[arena_index][after_leaver_slot])
-            {
-                g_iArenaQueue[arena_index][after_leaver_slot - 1] = g_iArenaQueue[arena_index][after_leaver_slot];
-                g_iPlayerSlot[g_iArenaQueue[arena_index][after_leaver_slot]] -= 1;
-                after_leaver_slot++;
-            }
-            g_iArenaQueue[arena_index][after_leaver_slot - 1] = 0;
-        }
+	if (g_iArenaStatus[arena] == AS_FIGHT) {
+		RemoveFromQueue(stayer, false, false);
+		MGEME_FinishMatch(stayer, leaver, arena, false); //include stayer_score, leaver_score?
+	} else if (g_iArenaStatus[arena] < AS_FIGHT) {
+		RemoveFromQueue(stayer, false, false);
+		char dels[2][50];
+		strcopy(leaver_64, sizeof(leaver_64), dels[1]);
+		wsSendMatchCancel(dels, stayer_64, arena);
+	}
+	//remember to kill connect timers btw
     }
 
     if (g_hWelcomeTimer[client] != null)
