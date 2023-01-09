@@ -654,7 +654,6 @@ public void OnClientPostAdminCheck(int client)
     else
     {
         ChangeClientTeam(client, TEAM_SPEC);
-        CreateTimer(5.0, Timer_ShowAdv, GetClientUserId(client)); /* Show advice to type !add in chat */
         g_bHitBlip[client] = false;
         g_bShowHud[client] = true;
         g_bPlayerRestoringAmmo[client] = false;
@@ -4979,19 +4978,6 @@ public Action Timer_ChangeSpecTarget(Handle timer, int userid)
     }
 
     return Plugin_Stop;
-}
-
-public Action Timer_ShowAdv(Handle timer, int userid)
-{
-    int client = GetClientOfUserId(userid);
-
-    if (IsValidClient(client) && g_iPlayerArena[client] == 0)
-    {
-        MC_PrintToChat(client, "%t", "Adv");
-        CreateTimer(15.0, Timer_ShowAdv, userid);
-    }
-
-    return Plugin_Continue;
 }
 
 public Action Timer_GiveAmmo(Handle timer, int userid)
