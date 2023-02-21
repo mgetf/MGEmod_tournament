@@ -6017,7 +6017,7 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
 		}
 		mmMatches[arena][0] = p1;
 		mmMatches[arena][1] = p2;
-		//PrintToServer("%s %s %s %s", mmMatches[arena][0], mmMatches[arena][1], p1, p2);
+		PrintToServer("New match in arena %i: %s %s %s %s",arena, mmMatches[arena][0], mmMatches[arena][1], p1, p2);
 		
 		int playerClients[2];
 		playerClients[0] = GetPlayerFromSteamID(p1);
@@ -6030,6 +6030,10 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
 		}
 		
 		mmConnectTimers[arena] = CreateTimer(gcvar_mgemeConnectGrace.FloatValue, Timer_WaitForPlayers, arena);
+	} else if (StrEqual(typeBuf, "Error")) {
+		char err[2056];
+		msg.GetString("error", err, sizeof(err));
+		PrintToServer("Received json error message from webserver: %s", err);
 	}
 	
 	delete msg;
