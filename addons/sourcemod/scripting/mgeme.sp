@@ -6092,6 +6092,10 @@ public void wsSendMatchResults(char winner[50], char loser[50], bool finished)
 	payload.SetString("winner", winner);
 	payload.SetString("loser", loser);
 	payload.SetBool("finished", finished);
+	msg.Set("payload", payload);
+	char send[1000];
+	msg.ToString(send, sizeof(send));
+	ws.WriteString(send);
 	delete payload;
 	delete msg;
 }
