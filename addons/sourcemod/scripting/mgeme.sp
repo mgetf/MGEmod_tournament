@@ -248,7 +248,7 @@ char
 WebSocket ws;
 char wsHost[64], wsPortStr[12], wsApiKey[256], wsChildId[16];
 char serverHost[64], serverPort[64], stvPort[64];
-bool MMUSEFRAGLIMIT = true;
+bool MMUSEFRAGLIMIT = false;
 int MMFRAGLIMIT = 5;
 Handle wfpTimer; //waiting for players
 
