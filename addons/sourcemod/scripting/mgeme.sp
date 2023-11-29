@@ -485,7 +485,6 @@ public void OnAllPluginsLoaded()
 	ws.Connect();
 	ws.SetReadCallback(WebSocket_JSON, wsReadCallback);
 	ws.SetConnectCallback(wsConnCallback);
-	ws.SetErrorCallback(wsErrorCallback);
 }
 
 /* OnPluginEnd()
@@ -6038,10 +6037,6 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
 	}
 	
 	delete msg;
-}
-
-public void wsErrorCallback(WebSocket sock) {
-	 PrintToServer("failed to connect");
 }
 
 public void wsConnCallback(WebSocket sock, any data)
