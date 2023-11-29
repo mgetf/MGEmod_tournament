@@ -257,6 +257,10 @@ char mmMatches[MAXARENAS][2][50]; //char[] is a string (array of chars). char[][
 //Array of timers, one for each arena, expecting connections and sending to the webserver if both players join or not.
 Handle mmConnectTimers[MAXARENAS];
 
+#define PRE_TOURNAMENT 1
+#define TOURNAMENT_ACTIVE 2
+int MMMODE = PRE_TOURNAMENT;
+
 static const char stockSounds[][] =  // Sounds that do not need to be downloaded.
 {
     "vo/intel_teamcaptured.wav",
@@ -680,6 +684,7 @@ public void OnClientPostAdminCheck(int client)
 	}
 	//GetPlayerFromSteamID(); //why did i add this to my code? am i stupid (yes)
 	
+	// reuse this code
 	bool found = false;
 	for (int i = 1; i < MAXARENAS; i++) {
 		char p1[50], p2[50];
@@ -697,8 +702,8 @@ public void OnClientPostAdminCheck(int client)
 		GetClientAuthId(client, AuthId_Steam2, steamid, sizeof(steamid));
 		int aid = FindAdminByIdentity("steam", steamid);
 		if (aid == INVALID_ADMIN_ID) {
-			KickClient(client, "This server operates for MGEME; You must be in a match to join this server");
-			PrintToServer("Kicking player %s for not being in a match", sidBuf);
+		  //KickClient(client, "This server operates for MGEME; You must be in a match to join this server");
+		  //PrintToServer("Kicking player %s for not being in a match", sidBuf);
 		} else {
 			PrintToServer("Permitting connection by non-matched admin %s", sidBuf);
 		}
@@ -2644,6 +2649,10 @@ void ShowMainMenu(int client, bool listplayers = true)
     if (!IsValidClient(client))
         return;
 
+	if (MMMODE == TOURNAMENT_ACTIVE)
+	   return;
+
+
     char title[128];
     char menu_item[128];
 
@@ -2730,6 +2739,7 @@ void ShowMainMenu(int client, bool listplayers = true)
 
 public int Menu_Main(Menu menu, MenuAction action, int param1, int param2)
 {
+
     switch (action)
     {
         case MenuAction_Select:
