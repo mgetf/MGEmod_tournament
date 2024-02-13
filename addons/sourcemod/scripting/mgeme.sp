@@ -484,7 +484,7 @@ public void OnAllPluginsLoaded()
 	bool ok = Websocket_Send(wsHandle, SendType_Text, "Hello world!");
 	*/
 	char buf[256];
-	Format(buf, sizeof(buf), "ws://%s:%s/tf2serverep", wsHost, wsPortStr);
+	Format(buf, sizeof(buf), "ws://127.0.0.1:8080/tf2serverep", wsHost, wsPortStr);
 	ws = new WebSocket(buf);
 	ws.Connect();
 	ws.SetReadCallback(WebSocket_JSON, wsReadCallback);
@@ -6015,12 +6015,14 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
 	msg = JSONObject.FromString(tsbuf);
 	char typeBuf[30];
 	msg.GetString("type", typeBuf, sizeof(typeBuf));
+    JSONObject payload = view_as<JSONObject>(msg.Get("payload"));
+
 	PrintToServer("Receiving JSON message of type %s", typeBuf);
 	if (StrEqual(typeBuf, "MatchDetails")) {
 		char p1[50], p2[50];
-		int arena = msg.GetInt("arenaId");
-		bool b = msg.GetString("p1Id", p1, sizeof(p1));
-		bool c = msg.GetString("p2Id", p2, sizeof(p2));
+		int arena = payload.GetInt("arenaId");
+		bool b = payload.GetString("p1Id", p1, sizeof(p1));
+		bool c = payload.GetString("p2Id", p2, sizeof(p2));
 		if (!b || !c) {
 			PrintToServer("Malformed matchInit json message %s", tsbuf);
 			ThrowError("Malformed matchInit json message %s", tsbuf);
