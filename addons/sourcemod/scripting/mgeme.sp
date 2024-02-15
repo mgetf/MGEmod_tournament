@@ -732,12 +732,16 @@ public void OnClientDisconnect(int client)
 
 	if (g_iArenaStatus[arena] == AS_FIGHT) {
 		RemoveFromQueue(stayer, false, false);
-		MGEME_FinishMatch(stayer, leaver, arena, false); //include stayer_score, leaver_score?
+        if (MMMODE == TOURNAMENT_ACTIVE) {
+		    MGEME_FinishMatch(stayer, leaver, arena, false); //include stayer_score, leaver_score?
+        }
 	} else if (g_iArenaStatus[arena] < AS_FIGHT) {
 		RemoveFromQueue(stayer, false, false);
-		char dels[2][50];
-		strcopy(leaver_64, sizeof(leaver_64), dels[1]);
-		wsSendMatchCancel(dels, stayer_64, arena);
+        if (MMMODE == TOURNAMENT_ACTIVE) {
+            char dels[2][50];
+            strcopy(leaver_64, sizeof(leaver_64), dels[1]);
+            wsSendMatchCancel(dels, stayer_64, arena);
+        }
 	}
 	KillTimer(mmConnectTimers[arena]);
     }
@@ -1961,8 +1965,10 @@ void RemoveFromQueue(int client, bool calcstats = false, bool specfix = false)
                     if (g_iArenaScore[arena_index][foe_slot] >= g_iArenaEarlyLeave[arena_index])
                     {
                         CalcELO(foe, client);
-			MGEME_FinishMatch(client, foe, arena_index, false);
-                        MC_PrintToChatAll("%t", "XdefeatsYearly", foe_name, g_iArenaScore[arena_index][foe_slot], player_name, g_iArenaScore[arena_index][player_slot], g_sArenaName[arena_index]);
+                        if (MMMODE == TOURNAMENT_ACTIVE) {
+			                MGEME_FinishMatch(client, foe, arena_index, false);
+                            MC_PrintToChatAll("%t", "XdefeatsYearly", foe_name, g_iArenaScore[arena_index][foe_slot], player_name, g_iArenaScore[arena_index][player_slot], g_sArenaName[arena_index]);
+                        }
                     }
                 }
             }
@@ -2996,6 +3002,8 @@ public void handler_ConVarChange(Handle convar, const char[] oldValue, const cha
 // ====[ COMMANDS ]====================================================
 public Action Command_Menu(int client, int args)
 {
+    if (MMMODE == TOURNAMENT_ACTIVE)
+        return Plugin_Continue;
     //handle commands "!ammomod" "!add" and such //building queue's menu and listing arena's
     int playerPrefTeam = 0;
 
@@ -4209,9 +4217,11 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
             CalcELO2(killer, killer_teammate, victim, victim_teammate);
 
 	//mgeme
-	RemoveFromQueue(victim, false, true); //rfq(client, calcstats, specfix): calcstats would recalculate stats but they've already been calculated above. specfix makes sure to force player to spec.
-	RemoveFromQueue(killer, false, true);
-	MGEME_FinishMatch(killer, victim, arena_index, true);
+    if (MMMODE == TOURNAMENT_ACTIVE){
+	    RemoveFromQueue(victim, false, true); //rfq(client, calcstats, specfix): calcstats would recalculate stats but they've already been calculated above. specfix makes sure to force player to spec.
+	    RemoveFromQueue(killer, false, true);
+	    MGEME_FinishMatch(killer, victim, arena_index, true);
+    }
 
 	//I'm commenting out this (as I will comment out a lot of things I don't need) for now as I don't think it should be needed when I'm manually clearing out players after every game / there is no queue at all anyway
 	/*
@@ -4943,8 +4953,10 @@ public Action Timer_StartDuel(Handle timer, any arena_index)
     StartCountDown(arena_index);
 
 	//MGEME
-	KillTimer(mmConnectTimers[arena_index], false);
-	wsSendMatchBegan(mmMatches[arena_index]);
+    if (MMMODE == TOURNAMENT_ACTIVE) {
+	    KillTimer(mmConnectTimers[arena_index], false);
+	    wsSendMatchBegan(mmMatches[arena_index]);
+    }
 }
 
 public Action Timer_ResetPlayer(Handle timer, int userid)
@@ -6036,7 +6048,7 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
 		playerClients[1] = GetPlayerFromSteamID(p2);
 		for (int i = 0; i < 2; i++) {
 			int cli = playerClients[i];
-			if (cli > -1 && IsValidClient(cli) && !g_iPlayerArena[cli]) { //make sure client is valid and not already in an arena, then force to an arena
+			if (cli > -1 && IsValidClient(cli)) {
 				AddInQueue(cli, arena);
 			}
 		}
@@ -6046,14 +6058,52 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
 		char err[2056];
 		msg.GetString("error", err, sizeof(err));
 		PrintToServer("Received json error message from webserver: %s", err);
-	}
+
+	} else if (StrEqual(typeBuf, "TournamentStart")) {
+        PrintToServer("STARTING TOURNAMENT");
+        PrintToChatAll("========================");
+        PrintToChatAll("TOURNAMENT STARTING");
+        PrintToChatAll("========================");
+        MMMODE = TOURNAMENT_ACTIVE;
+        // TODO all players to spec
+
+        JSONObject msg = new JSONObject();
+        msg.SetString("type", "UsersInServer");
+        JSONObject payload = new JSONObject();
+
+        JSONArray players = new JSONArray();
+
+        for(int i = 1; i <= MAXPLAYERS; i++) {
+            if(g_iPlayerArena[i]) {
+                JSONObject p = new JSONObject();
+
+                char player_64[50];
+                GetClientAuthId(i, AuthId_SteamID64, player_64, sizeof(player_64));
+                p.SetString("steamId", player_64);
+
+                char client_name[MAX_NAME_LENGTH];
+                GetClientName(i, client_name, sizeof(client_name));
+                p.SetString("name", client_name);
+
+                players.Push(p);
+            }
+        }
+        payload.Set("players", players);
+        msg.Set("payload", payload);
+
+        char send[3000];
+        msg.ToString(send, sizeof(send));
+
+        ws.WriteString(send);
+        PrintToServer("sending json string with players");
 	
+    }
 	delete msg;
 }
 
 public void wsConnCallback(WebSocket sock, any data)
 {
-	 PrintToServer("connected to ws");
+	PrintToServer("connected to ws");
 	JSONObject hworld = new JSONObject();
 	hworld.SetString("type", "ServerHello");
 	JSONObject payload = new JSONObject();
