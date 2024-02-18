@@ -489,6 +489,7 @@ public void OnAllPluginsLoaded()
 	ws.Connect();
 	ws.SetReadCallback(WebSocket_JSON, wsReadCallback);
 	ws.SetConnectCallback(wsConnCallback);
+    ws.SetDisconnectCallback(wsDisconnCallback);
 }
 
 /* OnPluginEnd()
@@ -6065,7 +6066,13 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
         PrintToChatAll("TOURNAMENT STARTING");
         PrintToChatAll("========================");
         MMMODE = TOURNAMENT_ACTIVE;
-        // TODO all players to spec
+
+        // move all players to spec
+        for (int i = 1; i <= MAXPLAYERS; i++) {
+            if (g_iPlayerArena[i]) {
+                RemoveFromQueue(i, false, false);
+            }
+        }
 
         JSONObject msg = new JSONObject();
         msg.SetString("type", "UsersInServer");
@@ -6099,6 +6106,18 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
 	
     }
 	delete msg;
+}
+
+public Action Timer_ConnectToMGEME(Handle timer, int data)
+{
+    PrintToServer("Connecting to MGEME");
+    ws.Connect();
+}
+
+public void wsDisconnCallback(WebSocket sock, any data)
+{
+    PrintToServer("disconnected from ws, retrying");
+    CreateTimer(5.0, Timer_ConnectToMGEME, 0);
 }
 
 public void wsConnCallback(WebSocket sock, any data)
