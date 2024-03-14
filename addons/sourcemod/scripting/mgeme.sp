@@ -1925,7 +1925,6 @@ void RemoveFromQueue(int client, bool calcstats = false, bool specfix = false)
             }
         }
     }
-
     else //if not four person arena
     {
         if (player_slot == SLOT_ONE || player_slot == SLOT_TWO)
@@ -1965,9 +1964,11 @@ void RemoveFromQueue(int client, bool calcstats = false, bool specfix = false)
                 {
                     if (g_iArenaScore[arena_index][foe_slot] >= g_iArenaEarlyLeave[arena_index])
                     {
+                        // winner, loser
                         CalcELO(foe, client);
                         if (MMMODE == TOURNAMENT_ACTIVE) {
-			                MGEME_FinishMatch(client, foe, arena_index, false);
+                            // winner, loser, index, finished
+			                MGEME_FinishMatch(foe, client, arena_index, false);
                             MC_PrintToChatAll("%t", "XdefeatsYearly", foe_name, g_iArenaScore[arena_index][foe_slot], player_name, g_iArenaScore[arena_index][player_slot], g_sArenaName[arena_index]);
                         }
                     }
@@ -4217,43 +4218,41 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
         else if (!g_bNoStats)
             CalcELO2(killer, killer_teammate, victim, victim_teammate);
 
-	//mgeme
-    if (MMMODE == TOURNAMENT_ACTIVE){
-	    RemoveFromQueue(victim, false, true); //rfq(client, calcstats, specfix): calcstats would recalculate stats but they've already been calculated above. specfix makes sure to force player to spec.
-	    RemoveFromQueue(killer, false, true);
-	    MGEME_FinishMatch(killer, victim, arena_index, true);
-    }
-
-	//I'm commenting out this (as I will comment out a lot of things I don't need) for now as I don't think it should be needed when I'm manually clearing out players after every game / there is no queue at all anyway
-	/*
-        if (!g_bFourPersonArena[arena_index])
-        {
-            if (g_iArenaQueue[arena_index][SLOT_TWO + 1])
+	    //mgeme
+        if (MMMODE == TOURNAMENT_ACTIVE){
+            RemoveFromQueue(victim, false); //rfq(client, calcstats, specfix): calcstats would recalculate stats but they've already been calculated above. specfix makes sure to force player to spec.
+            RemoveFromQueue(killer, false);
+            MGEME_FinishMatch(killer, victim, arena_index, true);
+        } else {
+            if (!g_bFourPersonArena[arena_index])
             {
-                RemoveFromQueue(victim, false, true);
-                AddInQueue(victim, arena_index, false);
-            } else {
-                CreateTimer(3.0, Timer_StartDuel, arena_index);
+                if (g_iArenaQueue[arena_index][SLOT_TWO + 1])
+                {
+                    RemoveFromQueue(victim, false, true);
+                    AddInQueue(victim, arena_index, false);
+                } else {
+                    CreateTimer(3.0, Timer_StartDuel, arena_index);
+                }
+            }
+            else
+            {
+                if (g_iArenaQueue[arena_index][SLOT_FOUR + 1] && g_iArenaQueue[arena_index][SLOT_FOUR + 2])
+                {
+                    RemoveFromQueue(victim_teammate, false, true);
+                    RemoveFromQueue(victim, false, true);
+                    AddInQueue(victim_teammate, arena_index, false);
+                    AddInQueue(victim, arena_index, false);
+                }
+                else if (g_iArenaQueue[arena_index][SLOT_FOUR + 1])
+                {
+                    RemoveFromQueue(victim, false, true);
+                    AddInQueue(victim, arena_index, false);
+                }
+                else {
+                    CreateTimer(3.0, Timer_StartDuel, arena_index);
+                }
             }
         }
-        else
-        {
-            if (g_iArenaQueue[arena_index][SLOT_FOUR + 1] && g_iArenaQueue[arena_index][SLOT_FOUR + 2])
-            {
-                RemoveFromQueue(victim_teammate, false, true);
-                RemoveFromQueue(victim, false, true);
-                AddInQueue(victim_teammate, arena_index, false);
-                AddInQueue(victim, arena_index, false);
-            }
-            else if (g_iArenaQueue[arena_index][SLOT_FOUR + 1])
-            {
-                RemoveFromQueue(victim, false, true);
-                AddInQueue(victim, arena_index, false);
-            }
-            else {
-                CreateTimer(3.0, Timer_StartDuel, arena_index);
-            }
-        }*/
     }
     else if (g_bArenaAmmomod[arena_index] || g_bArenaMidair[arena_index])
     {
@@ -6007,7 +6006,7 @@ public void MGEME_FinishMatch(int winner, int loser, int arena_index, bool finis
 	if (!GetClientAuthId(winner, AuthId_SteamID64, winnerSid, sizeof(winnerSid)) || !GetClientAuthId(loser, AuthId_SteamID64, loserSid, sizeof(loserSid)))
 		PrintToServer("Issue getting Steamid for clients in MGEME_FinishMatch");
 
-	wsSendMatchResults(winnerSid, loserSid, finished);
+	wsSendMatchResults(winnerSid, loserSid, finished, arena_index);
 }
 
 
@@ -6042,14 +6041,27 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
 		}
 		mmMatches[arena][0] = p1;
 		mmMatches[arena][1] = p2;
-		PrintToServer("New match in arena %i: %s %s %s %s",arena, mmMatches[arena][0], mmMatches[arena][1], p1, p2);
+
+		PrintToServer("New match in arena %i: %s %s %s %s",
+                     arena, 
+                     mmMatches[arena][0], 
+                     mmMatches[arena][1], 
+                     p1, p2);
 		
 		int playerClients[2];
 		playerClients[0] = GetPlayerFromSteamID(p1);
 		playerClients[1] = GetPlayerFromSteamID(p2);
+
+        PrintToServer("player client 0 %i", playerClients[0]);
+        PrintToServer("player client 1 %i", playerClients[1]);
+
 		for (int i = 0; i < 2; i++) {
 			int cli = playerClients[i];
 			if (cli > -1 && IsValidClient(cli)) {
+
+                if (g_iPlayerArena[cli])
+                    RemoveFromQueue(cli, false);
+
 				AddInQueue(cli, arena);
 			}
 		}
@@ -6060,6 +6072,20 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
 		msg.GetString("error", err, sizeof(err));
 		PrintToServer("Received json error message from webserver: %s", err);
 
+	} else if (StrEqual(typeBuf, "SetMatchScore")) {
+        PrintToServer("Setting match sore");
+        // todo reload huds
+
+        int arena = payload.GetInt("arenaId");
+        int p1score = payload.GetInt("p1Score");
+        int p2score = payload.GetInt("p2Score");
+
+        g_iArenaScore[arena][SLOT_ONE] = p1score;
+        g_iArenaScore[arena][SLOT_TWO] = p2score;
+
+        ShowHudToAll();
+
+
 	} else if (StrEqual(typeBuf, "TournamentStart")) {
         PrintToServer("STARTING TOURNAMENT");
         PrintToChatAll("========================");
@@ -6067,12 +6093,6 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
         PrintToChatAll("========================");
         MMMODE = TOURNAMENT_ACTIVE;
 
-        // move all players to spec
-        for (int i = 1; i <= MAXPLAYERS; i++) {
-            if (g_iPlayerArena[i]) {
-                RemoveFromQueue(i, false, false);
-            }
-        }
 
         JSONObject msg = new JSONObject();
         msg.SetString("type", "UsersInServer");
@@ -6101,10 +6121,24 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
         char send[3000];
         msg.ToString(send, sizeof(send));
 
-        ws.WriteString(send);
         PrintToServer("sending json string with players");
+        ws.WriteString(send);
+
+        // move all players to spec
+        for (int i = 1; i <= MAXPLAYERS; i++) {
+            if (g_iPlayerArena[i]) {
+                RemoveFromQueue(i, false, true);
+            }
+        }
 	
+	} else if (StrEqual(typeBuf, "TournamentStop")) {
+        PrintToServer("STOPPING TOURNAMENT");
+        PrintToChatAll("------------------------");
+        PrintToChatAll("STOPPING TOURNAMENT");
+        PrintToChatAll("------------------------");
+        MMMODE = PRE_TOURNAMENT;
     }
+
 	delete msg;
 }
 
@@ -6166,7 +6200,7 @@ public void wsSendMatchCancel(char delinquents[2][50], char goodboy[50], int are
 	delete msg;
 }
 
-public void wsSendMatchResults(char winner[50], char loser[50], bool finished)
+public void wsSendMatchResults(char winner[50], char loser[50], bool finished, int arena_index)
 {
 	JSONObject msg = new JSONObject();
 	msg.SetString("type", "MatchResults");
@@ -6174,6 +6208,7 @@ public void wsSendMatchResults(char winner[50], char loser[50], bool finished)
 	payload.SetString("winner", winner);
 	payload.SetString("loser", loser);
 	payload.SetBool("finished", finished);
+    payload.SetInt("arena", arena_index);
 	msg.Set("payload", payload);
 	char send[1000];
 	msg.ToString(send, sizeof(send));
