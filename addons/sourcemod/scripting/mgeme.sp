@@ -339,7 +339,7 @@ public void OnPluginStart()
     gcvar_spawnFile = CreateConVar("mgemod_spawnfile", MAPCONFIGFILE, "Spawn file");
 
     gcvar_mgemeFragLimit = CreateConVar("mgeme_frag_limit", "5", "Frags to win round", FCVAR_SPONLY | FCVAR_NOTIFY, true, 1, true, 99); 
-    gcvar_mgemeConnectGrace = CreateConVar("mgeme_connect_grace_period", "180.0", "How many seconds players have to join after a match begins", FCVAR_NONE, true, 5.0, true, 500.0);
+    gcvar_mgemeConnectGrace = CreateConVar("mgeme_connect_grace_period", "30.0", "How many seconds players have to join after a match begins", FCVAR_NONE, true, 5.0, true, 500.0);
 
     // Populate global variables with their corresponding convar values.
     g_iDefaultFragLimit = gcvar_fragLimit.IntValue;
@@ -719,30 +719,21 @@ public void OnClientPostAdminCheck(int client)
 public void OnClientDisconnect(int client)
 {
 	int leaver = client;
-    if (g_iPlayerArena[client]) {
-	int leaver_slot = g_iPlayerSlot[client];
-	int arena = g_iPlayerArena[client];
-	int leaver_score = g_iArenaScore[arena][leaver_slot];
-	int stayer_slot = leaver_slot == SLOT_ONE ? SLOT_TWO : SLOT_ONE;
-	int stayer = g_iArenaQueue[arena][stayer_slot];
-	int stayer_score = g_iArenaScore[arena][stayer_slot];
-	
-	char stayer_64[50], leaver_64[50];
-	GetClientAuthId(stayer, AuthId_SteamID64, stayer_64, sizeof(stayer_64));
-	GetClientAuthId(leaver, AuthId_SteamID64, leaver_64, sizeof(leaver_64));
 
-	if (g_iArenaStatus[arena] == AS_FIGHT) {
-		RemoveFromQueue(stayer, false, false);
-		MGEME_FinishMatch(stayer, leaver, arena, false); //include stayer_score, leaver_score?
-	} else if (g_iArenaStatus[arena] < AS_FIGHT) {
-		RemoveFromQueue(stayer, false, false);
-        if (MMMODE == TOURNAMENT_ACTIVE) {
-            char dels[2][50];
-            strcopy(leaver_64, sizeof(leaver_64), dels[1]);
-            wsSendMatchCancel(dels, stayer_64, arena);
+    if (IsValidClient(client) && g_iPlayerArena[client]) {
+	    RemoveFromQueue(client, true);
+
+	    int leaver_slot = g_iPlayerSlot[client];
+	    int arena = g_iPlayerArena[client];
+	    int stayer_slot = leaver_slot == SLOT_ONE ? SLOT_TWO : SLOT_ONE;
+	    int stayer = g_iArenaQueue[arena][stayer_slot];
+	
+	    if (MMMODE == TOURNAMENT_ACTIVE) {
+		    RemoveFromQueue(stayer, false);
         }
-	}
-	KillTimer(mmConnectTimers[arena]);
+	    KillTimer(mmConnectTimers[arena]);
+    } else {
+        RemoveFromQueue(client, false);
     }
 
     if (g_hWelcomeTimer[client] != null)
@@ -1930,7 +1921,13 @@ void RemoveFromQueue(int client, bool calcstats = false, bool specfix = false)
             int foe_slot = player_slot == SLOT_ONE ? SLOT_TWO : SLOT_ONE;
             int foe = g_iArenaQueue[arena_index][foe_slot];
 
-            if (MMMODE == TOURNAMENT_ACTIVE) {
+
+            char foe_name[MAX_NAME_LENGTH];
+            char player_name[MAX_NAME_LENGTH];
+            GetClientName(foe, foe_name, sizeof(foe_name));
+            GetClientName(client, player_name, sizeof(player_name));
+
+            if (MMMODE == TOURNAMENT_ACTIVE && calcstats) {
                 // winner, loser, index, finished
 			    MGEME_FinishMatch(foe, client, arena_index, false);
                 MC_PrintToChatAll("%t", "XdefeatsYearly", foe_name, g_iArenaScore[arena_index][foe_slot], player_name, g_iArenaScore[arena_index][player_slot], g_sArenaName[arena_index]);
@@ -1957,10 +1954,6 @@ void RemoveFromQueue(int client, bool calcstats = false, bool specfix = false)
 
             if (g_iArenaStatus[arena_index] >= AS_FIGHT && g_iArenaStatus[arena_index] < AS_REPORTED && calcstats && !g_bNoStats && foe) //prematurely ended match
             {
-                char foe_name[MAX_NAME_LENGTH];
-                char player_name[MAX_NAME_LENGTH];
-                GetClientName(foe, foe_name, sizeof(foe_name));
-                GetClientName(client, player_name, sizeof(player_name));
 
                 g_iArenaStatus[arena_index] = AS_REPORTED;
 
