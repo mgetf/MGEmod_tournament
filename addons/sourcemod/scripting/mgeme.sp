@@ -2103,7 +2103,7 @@ void AddInQueue(int client, int arena_index, bool showmsg = true, int playerPref
 
             if (g_iArenaQueue[arena_index][SLOT_ONE] && g_iArenaQueue[arena_index][SLOT_TWO])
             {
-                CreateTimer(8.0, Timer_StartDuel, arena_index);
+                CreateTimer(1.5, Timer_StartDuel, arena_index);
             } else
                 CreateTimer(0.1, Timer_ResetPlayer, GetClientUserId(client));
         } else {
