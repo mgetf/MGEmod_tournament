@@ -475,7 +475,7 @@ public void OnAllPluginsLoaded()
 	mgeMeKeyValues.GetString("selfPort", serverPort, 64);
 	mgeMeKeyValues.GetString("stvPort", stvPort, 64);
 	delete mgeMeKeyValues;
-	PrintToServer("MGEME *+*+*+*+*+*+*+*+*+*+*+*+*+ connecting to server @ %s@%s", wsHost, wsPortStr);
+	PrintToServer("MGEME *+*+*+*+*+*+*+*+*+*+*+*+*+ connecting to rust server @ %s@%s", wsHost, wsPortStr);
 	
 	/*
 	int wsPort = StringToInt(wsPortStr);
@@ -484,7 +484,7 @@ public void OnAllPluginsLoaded()
 	bool ok = Websocket_Send(wsHandle, SendType_Text, "Hello world!");
 	*/
 	char buf[256];
-	Format(buf, sizeof(buf), "ws://127.0.0.1:8080/tf2serverep", wsHost, wsPortStr);
+	Format(buf, sizeof(buf), "ws://%s:%s/tf2serverep", wsHost, wsPortStr);
 	ws = new WebSocket(buf);
 	ws.Connect();
 	ws.SetReadCallback(WebSocket_JSON, wsReadCallback);
