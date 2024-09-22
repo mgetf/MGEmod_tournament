@@ -457,6 +457,11 @@ public void OnPluginStart()
 
 public void OnAllPluginsLoaded()
 {	
+    int isMapAm = LoadSpawnPoints();
+    if (!isMapAm)
+    {
+        SetFailState("Map not supported. MGEMod disabled.");
+    }
 	char txtfile[256];
 	BuildPath(Path_SM, txtfile, sizeof(txtfile), "configs/mge_me.cfg");
 	
@@ -1100,6 +1105,7 @@ public Action OnTouchHoop(int entity, int other)
 
         g_bPlayerHasIntel[client] = false;
         g_iArenaScore[arena_index][client_team_slot] += 1;
+        UpdateScoreWS(arena_index);
 
         if (fraglimit > 0 && g_iArenaScore[arena_index][client_team_slot] >= fraglimit && g_iArenaStatus[arena_index] >= AS_FIGHT && g_iArenaStatus[arena_index] < AS_REPORTED)
         {
@@ -3241,6 +3247,7 @@ public Action Command_JoinClass(int client, int args)
                             {
 
                                 g_iArenaScore[arena_index][killer_team_slot] += 1;
+                                UpdateScoreWS(arena_index);
                                 MC_PrintToChat(killer, "%t", "ClassChangePointOpponent");
                                 MC_PrintToChat(client, "%t", "ClassChangePoint");
 
@@ -4144,8 +4151,11 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
             return Plugin_Handled;
     }
 
-    if (!g_bArenaBBall[arena_index] && !g_bArenaKoth[arena_index] && (!g_bFourPersonArena[arena_index] || (g_bFourPersonArena[arena_index] && !IsPlayerAlive(victim_teammate)))) // Kills shouldn't give points in bball. Or if only 1 player in a two person arena dies
+    if (!g_bArenaBBall[arena_index] && !g_bArenaKoth[arena_index] && (!g_bFourPersonArena[arena_index] || (g_bFourPersonArena[arena_index] && !IsPlayerAlive(victim_teammate)))) {// Kills shouldn't give points in bball. Or if only 1 player in a two person arena dies
         g_iArenaScore[arena_index][killer_team_slot] += 1;
+        UpdateScoreWS(arena_index);
+    }
+
 
     if (!g_bArenaEndif[arena_index]) // Endif does not need to display health, since it is one-shot kills.
     {
@@ -4932,6 +4942,7 @@ public Action Timer_StartDuel(Handle timer, any arena_index)
 
     g_iArenaScore[arena_index][SLOT_ONE] = 0;
     g_iArenaScore[arena_index][SLOT_TWO] = 0;
+    UpdateScoreWS(arena_index);
     ShowPlayerHud(g_iArenaQueue[arena_index][SLOT_ONE]);
     ShowPlayerHud(g_iArenaQueue[arena_index][SLOT_TWO]);
 
@@ -5665,6 +5676,7 @@ public void EndKoth(any arena_index, any winner_team)
 
     PlayEndgameSoundsToArena(arena_index, winner_team);
     g_iArenaScore[arena_index][winner_team] += 1;
+    UpdateScoreWS(arena_index);
     int fraglimit = g_iArenaFraglimit[arena_index];
     int client = g_iArenaQueue[arena_index][winner_team];
     int client_slot = winner_team;
@@ -6075,6 +6087,7 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
 
         g_iArenaScore[arena][SLOT_ONE] = p1score;
         g_iArenaScore[arena][SLOT_TWO] = p2score;
+        UpdateScoreWS(arena);
 
         ShowHudToAll();
 
@@ -6104,6 +6117,9 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
                 char client_name[MAX_NAME_LENGTH];
                 GetClientName(i, client_name, sizeof(client_name));
                 p.SetString("name", client_name);
+
+                // get player's elo
+                p.SetInt("elo", g_iPlayerRating[i]);
 
                 players.Push(p);
             }
@@ -6223,4 +6239,19 @@ public void wsSendMatchBegan(char players[2][50])
 	ws.WriteString(send);
 	delete payload;
 	delete msg;
+}
+
+public void UpdateScoreWS(int arena_index) {
+    JSONObject msg = new JSONObject();
+    msg.SetString("type", "ScoreNotification");
+    JSONObject payload = new JSONObject();
+    payload.SetInt("arena", arena_index);
+    payload.SetInt("p1Score", g_iArenaScore[arena_index][SLOT_ONE]);
+    payload.SetInt("p2Score", g_iArenaScore[arena_index][SLOT_TWO]);
+    msg.Set("payload", payload);
+    char send[1000];
+    msg.ToString(send, sizeof(send));
+    ws.WriteString(send);
+    delete payload;
+    delete msg;
 }
