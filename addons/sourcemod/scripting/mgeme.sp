@@ -8,6 +8,8 @@
 #include <sdkhooks>
 #include <morecolors>
 #include <ripext> //https://github.com/eldoradoel/sm-ripext-websocket			:-)
+#include <tf2attributes>
+
 // ====[ CONSTANTS ]===================================================
 #define PL_VERSION "3.0.1"
 #define MAXARENAS 63
@@ -16,6 +18,7 @@
 #define MAPCONFIGFILE "configs/mgemod_spawns.cfg"
 
 #define GUNBOATS_ID 133
+bool g_bShouldHaveGunboats[MAXPLAYERS + 1];
 
 #pragma newdecls required
 
@@ -77,6 +80,9 @@ Handle
     hm_KothTimerBLU,
     hm_KothTimerRED,
     hm_KothCap;
+
+
+Handle g_hGiveNamedItem = null;
 
 // Global Variables
 char g_sMapName[64],
@@ -428,8 +434,8 @@ public void OnPluginStart()
 
     AddCommandListener(Command_DropItem, "dropitem");
 
+    // from mge.tf
     RegConsoleCmd("gb", Command_Gunboats, "Force both players to use gunboats");
-
     // Create the HUD text handles for later use.
     hm_HP           = CreateHudSynchronizer();
     hm_Score        = CreateHudSynchronizer();
@@ -508,6 +514,10 @@ public void OnAllPluginsLoaded()
 public void OnPluginEnd()
 {
 	ws.Close();
+    if (g_hGiveNamedItem != null)
+    {
+        delete g_hGiveNamedItem;
+    }
 }
 
 /* OnMapStart()
@@ -4024,7 +4034,43 @@ public Action Event_PlayerSpawn(Event event, const char[] name, bool dontBroadca
     {
         g_bPlayerHasIntel[client] = false;
     }
+
+    // Re-equip gunboats if they should have them
+    if (g_bShouldHaveGunboats[client] && g_tfctPlayerClass[client] == TFClass_Soldier)
+    {
+
+        if (!HasGunboatsEquipped(client)) {
+            
+            PrintToChat(client, "respawned with fake gunboats, because someone used the !gb command");
+            // remove existing gunboats effect
+            TF2Attrib_RemoveByDefIndex(client, 135);
+            // add new gunboats effect
+            TF2Attrib_SetByDefIndex(client, 135, 0.4);
+            //disable slot2
+            TF2_RemoveWeaponSlot(client, 1);
+
+        }
+    }
+
 }
+
+bool HasGunboatsEquipped(int client)
+{
+    // Loop through all wearable entities on the client
+    int i = -1;
+    while ((i = FindEntityByClassname(i, "tf_wearable*")) != -1)
+    {
+        if (GetEntPropEnt(i, Prop_Send, "m_hOwnerEntity") == client)
+        {
+            int itemdef = GetEntProp(i, Prop_Send, "m_iItemDefinitionIndex");
+            // 133 is the item definition index for gunboats
+            if (itemdef == 133)
+                return true;
+        }
+    }
+    return false;
+}
+
 
 public Action Event_WinPanel(Event event, const char[] name, bool dontBroadcast)
 {
@@ -5978,27 +6024,6 @@ public Action Command_Mge(int client, int args)
     return Plugin_Handled;
 }
 
-// Add this helper function
-stock int TF2_GiveNamedItem(int client, const char[] classname, int itemindex)
-{
-    Handle hGiveNamedItem = null;
-    
-    if (hGiveNamedItem == null)
-    {
-        Handle hGameConf = LoadGameConfigFile("core.games");
-        StartPrepSDKCall(SDKCall_Player);
-        PrepSDKCall_SetFromConf(hGameConf, SDKConf_Virtual, "GiveNamedItem");
-        PrepSDKCall_AddParameter(SDKType_String, SDKPass_Pointer);
-        PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
-        PrepSDKCall_SetReturnInfo(SDKType_CBaseEntity, SDKPass_Pointer);
-        hGiveNamedItem = EndPrepSDKCall();
-        CloseHandle(hGameConf);
-    }
-    
-    return SDKCall(hGiveNamedItem, client, classname, itemindex, 0, true);
-}
-
-// Add this new function
 public Action Command_Gunboats(int client, int args)
 {
     if (!IsValidClient(client))
@@ -6027,30 +6052,20 @@ public Action Command_Gunboats(int client, int args)
     // Try to equip gunboats for first player if they're a Soldier
     if (IsValidClient(red_f1) && g_tfctPlayerClass[red_f1] == TFClass_Soldier)
     {
-        TF2_RemoveWeaponSlot(red_f1, 1); // Remove secondary weapon
-        int gunboats = TF2_GiveNamedItem(red_f1, "tf_wearable", GUNBOATS_ID);
-        if (gunboats != -1)
-        {
-            EquipPlayerWeapon(red_f1, gunboats);
-            anySuccess = true;
-        }
+        anySuccess = true;
+        g_bShouldHaveGunboats[red_f1] = true;
     }
 
     // Try to equip gunboats for second player if they're a Soldier
     if (IsValidClient(blu_f1) && g_tfctPlayerClass[blu_f1] == TFClass_Soldier)
     {
-        TF2_RemoveWeaponSlot(blu_f1, 1); // Remove secondary weapon
-        int gunboats = TF2_GiveNamedItem(blu_f1, "tf_wearable", GUNBOATS_ID);
-        if (gunboats != -1)
-        {
-            EquipPlayerWeapon(blu_f1, gunboats);
-            anySuccess = true;
-        }
+        anySuccess = true;
+        g_bShouldHaveGunboats[blu_f1] = true;
     }
 
     if (anySuccess)
     {
-        MC_PrintToChatAll("%t", "GunboatsEquipped");
+        MC_PrintToChat(client, "both players are now wearing gunboats");
     }
     else
     {
@@ -6059,6 +6074,7 @@ public Action Command_Gunboats(int client, int args)
 
     return Plugin_Handled;
 }
+
 
 
 public void UpdateArenaName(int arena)
