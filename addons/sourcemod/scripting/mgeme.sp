@@ -15,6 +15,8 @@
 #define HUDFADEOUTTIME 120.0
 #define MAPCONFIGFILE "configs/mgemod_spawns.cfg"
 
+#define GUNBOATS_ID 133
+
 #pragma newdecls required
 
 // arena slots
@@ -425,6 +427,8 @@ public void OnPluginStart()
     RegAdminCmd("mge", Command_Mge, ADMFLAG_BAN, "Change arena to MGE Mode");
 
     AddCommandListener(Command_DropItem, "dropitem");
+
+    RegConsoleCmd("gb", Command_Gunboats, "Force both players to use gunboats");
 
     // Create the HUD text handles for later use.
     hm_HP           = CreateHudSynchronizer();
@@ -5973,6 +5977,89 @@ public Action Command_Mge(int client, int args)
 
     return Plugin_Handled;
 }
+
+// Add this helper function
+stock int TF2_GiveNamedItem(int client, const char[] classname, int itemindex)
+{
+    Handle hGiveNamedItem = null;
+    
+    if (hGiveNamedItem == null)
+    {
+        Handle hGameConf = LoadGameConfigFile("core.games");
+        StartPrepSDKCall(SDKCall_Player);
+        PrepSDKCall_SetFromConf(hGameConf, SDKConf_Virtual, "GiveNamedItem");
+        PrepSDKCall_AddParameter(SDKType_String, SDKPass_Pointer);
+        PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+        PrepSDKCall_SetReturnInfo(SDKType_CBaseEntity, SDKPass_Pointer);
+        hGiveNamedItem = EndPrepSDKCall();
+        CloseHandle(hGameConf);
+    }
+    
+    return SDKCall(hGiveNamedItem, client, classname, itemindex, 0, true);
+}
+
+// Add this new function
+public Action Command_Gunboats(int client, int args)
+{
+    if (!IsValidClient(client))
+        return Plugin_Continue;
+        
+    int arena_index = g_iPlayerArena[client];
+    if (!arena_index)
+    {
+        MC_PrintToChat(client, "You must be in an arena to use this command!");
+        return Plugin_Handled;
+    }
+
+    int player_slot = g_iPlayerSlot[client];
+    if (player_slot > SLOT_TWO && !g_bFourPersonArena[arena_index])
+    {
+        MC_PrintToChat(client, "You must be in the arena to use this command!");
+        return Plugin_Handled;
+    }
+
+    // Get both players in the arena
+    int red_f1 = g_iArenaQueue[arena_index][SLOT_ONE];
+    int blu_f1 = g_iArenaQueue[arena_index][SLOT_TWO];
+
+    bool anySuccess = false;
+
+    // Try to equip gunboats for first player if they're a Soldier
+    if (IsValidClient(red_f1) && g_tfctPlayerClass[red_f1] == TFClass_Soldier)
+    {
+        TF2_RemoveWeaponSlot(red_f1, 1); // Remove secondary weapon
+        int gunboats = TF2_GiveNamedItem(red_f1, "tf_wearable", GUNBOATS_ID);
+        if (gunboats != -1)
+        {
+            EquipPlayerWeapon(red_f1, gunboats);
+            anySuccess = true;
+        }
+    }
+
+    // Try to equip gunboats for second player if they're a Soldier
+    if (IsValidClient(blu_f1) && g_tfctPlayerClass[blu_f1] == TFClass_Soldier)
+    {
+        TF2_RemoveWeaponSlot(blu_f1, 1); // Remove secondary weapon
+        int gunboats = TF2_GiveNamedItem(blu_f1, "tf_wearable", GUNBOATS_ID);
+        if (gunboats != -1)
+        {
+            EquipPlayerWeapon(blu_f1, gunboats);
+            anySuccess = true;
+        }
+    }
+
+    if (anySuccess)
+    {
+        MC_PrintToChatAll("%t", "GunboatsEquipped");
+    }
+    else
+    {
+        MC_PrintToChat(client, "Both players must be Soldiers to use gunboats!");
+    }
+
+    return Plugin_Handled;
+}
+
 
 public void UpdateArenaName(int arena)
 {
