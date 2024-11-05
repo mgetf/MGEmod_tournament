@@ -1798,6 +1798,8 @@ void RemoveFromQueue(int client, bool calcstats = false, bool specfix = false)
         return;
     }
 
+    ClearGunboats(client);
+
     int player_slot = g_iPlayerSlot[client];
     g_iPlayerArena[client] = 0;
     g_iPlayerSlot[client] = 0;
@@ -4071,6 +4073,19 @@ bool HasGunboatsEquipped(int client)
     return false;
 }
 
+void ClearGunboats(int client)
+{
+    if (g_bShouldHaveGunboats[client])
+    {
+        g_bShouldHaveGunboats[client] = false;
+        if (IsValidClient(client))
+        {
+            TF2Attrib_RemoveByDefIndex(client, 135);
+            TF2_RegeneratePlayer(client);
+        }
+    }
+}
+
 
 public Action Event_WinPanel(Event event, const char[] name, bool dontBroadcast)
 {
@@ -4244,6 +4259,10 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
 
     if (g_iArenaStatus[arena_index] >= AS_FIGHT && g_iArenaStatus[arena_index] < AS_REPORTED && fraglimit > 0 && g_iArenaScore[arena_index][killer_team_slot] >= fraglimit)
     {
+        //clear gunboats from both players
+        ClearGunboats(killer);
+        ClearGunboats(victim);
+
         g_iArenaStatus[arena_index] = AS_REPORTED;
         char killer_name[128];
         char victim_name[128];
