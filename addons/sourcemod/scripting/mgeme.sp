@@ -20,6 +20,10 @@
 #define GUNBOATS_ID 133
 bool g_bShouldHaveGunboats[MAXPLAYERS + 1];
 
+int g_iSeriesScore[MAXARENAS + 1][3]; // [arena][team] tracks series wins
+int g_iCurrentGame[MAXARENAS + 1]; // Tracks which game in the series (1-3)
+bool g_bSeriesInProgress[MAXARENAS + 1]; // Whether a series is active
+
 #pragma newdecls required
 
 // arena slots
@@ -1540,18 +1544,28 @@ void ShowPlayerHud(int client)
     char report[128];
     int fraglimit = g_iArenaFraglimit[arena_index];
 
-    if (g_bArenaBBall[arena_index])
-    {
-        if (fraglimit > 0)
-            Format(report, sizeof(report), "Arena %s. Capture Limit(%d)", g_sArenaName[arena_index], fraglimit);
-        else
-            Format(report, sizeof(report), "Arena %s. No Capture Limit", g_sArenaName[arena_index]);
+    if(g_bSeriesInProgress[arena_index]) {
+        Format(report, sizeof(report), "Arena %s. Series %d-%d (Game %d/3). Frag Limit(%d)", 
+            g_sArenaName[arena_index],
+            g_iSeriesScore[arena_index][SLOT_ONE], 
+            g_iSeriesScore[arena_index][SLOT_TWO],
+            g_iCurrentGame[arena_index],
+            fraglimit);
     } else {
-        if (fraglimit > 0)
-            Format(report, sizeof(report), "Arena %s. Frag Limit(%d)", g_sArenaName[arena_index], fraglimit);
-        else
-            Format(report, sizeof(report), "Arena %s. No Frag Limit", g_sArenaName[arena_index]);
+        if (g_bArenaBBall[arena_index])
+        {
+            if (fraglimit > 0)
+                Format(report, sizeof(report), "Arena %s. Capture Limit(%d)", g_sArenaName[arena_index], fraglimit);
+            else
+                Format(report, sizeof(report), "Arena %s. No Capture Limit", g_sArenaName[arena_index]);
+        } else {
+            if (fraglimit > 0)
+                Format(report, sizeof(report), "Arena %s. Frag Limit(%d)", g_sArenaName[arena_index], fraglimit);
+            else
+                Format(report, sizeof(report), "Arena %s. No Frag Limit", g_sArenaName[arena_index]);
+        }
     }
+
 
     int red_f1 = g_iArenaQueue[arena_index][SLOT_ONE];
     int blu_f1 = g_iArenaQueue[arena_index][SLOT_TWO];
@@ -4160,6 +4174,47 @@ public Action Event_PlayerHurt(Event event, const char[] name, bool dontBroadcas
     return Plugin_Continue;
 }
 
+void StartNextSeriesGame(int arena_index) {
+    g_iCurrentGame[arena_index]++;
+    g_iArenaScore[arena_index][SLOT_ONE] = 0;
+    g_iArenaScore[arena_index][SLOT_TWO] = 0;
+    g_iArenaFraglimit[arena_index] = 20; // Set frag limit to 20 for each game
+    
+    // If someone has won 2 games, end the series
+    if (g_iSeriesScore[arena_index][SLOT_ONE] == 2 || g_iSeriesScore[arena_index][SLOT_TWO] == 2) {
+        EndSeries(arena_index);
+    } else {
+        CreateTimer(3.0, Timer_StartDuel, arena_index);
+    }
+}
+
+void EndSeries(int arena_index) {
+    int winner_slot = (g_iSeriesScore[arena_index][SLOT_ONE] > g_iSeriesScore[arena_index][SLOT_TWO]) ? SLOT_ONE : SLOT_TWO;
+    int winner = g_iArenaQueue[arena_index][winner_slot];
+    int loser_slot = (winner_slot == SLOT_ONE) ? SLOT_TWO : SLOT_ONE;
+    int loser = g_iArenaQueue[arena_index][loser_slot];
+    
+    char winner_name[MAX_NAME_LENGTH];
+    char loser_name[MAX_NAME_LENGTH];
+    GetClientName(winner, winner_name, sizeof(winner_name));
+    GetClientName(loser, loser_name, sizeof(loser_name));
+    
+    MC_PrintToChatAll("%t", "SeriesComplete", winner_name, g_iSeriesScore[arena_index][winner_slot], loser_name, g_iSeriesScore[arena_index][loser_slot]);
+    
+    if (!g_bNoStats)
+        CalcELO(winner, loser);
+    
+    // Reset series tracking
+    g_bSeriesInProgress[arena_index] = false;
+    g_iCurrentGame[arena_index] = 0;
+    g_iSeriesScore[arena_index][SLOT_ONE] = 0;
+    g_iSeriesScore[arena_index][SLOT_TWO] = 0;
+    
+    RemoveFromQueue(winner, false);
+    RemoveFromQueue(loser, false);
+    MGEME_FinishMatch(winner, loser, arena_index, true);
+}
+
 public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast)
 {
     int victim = GetClientOfUserId(event.GetInt("userid"));
@@ -4264,38 +4319,37 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
         ClearGunboats(victim);
 
         g_iArenaStatus[arena_index] = AS_REPORTED;
-        char killer_name[128];
-        char victim_name[128];
-        GetClientName(killer, killer_name, sizeof(killer_name));
-        GetClientName(victim, victim_name, sizeof(victim_name));
 
-
-        if (g_bFourPersonArena[arena_index])
-        {
-            char killer_teammate_name[128];
-            char victim_teammate_name[128];
-
-            GetClientName(killer_teammate, killer_teammate_name, sizeof(killer_teammate_name));
-            GetClientName(victim_teammate, victim_teammate_name, sizeof(victim_teammate_name));
-
-            Format(killer_name, sizeof(killer_name), "%s and %s", killer_name, killer_teammate_name);
-            Format(victim_name, sizeof(victim_name), "%s and %s", victim_name, victim_teammate_name);
-        }
-
-        MC_PrintToChatAll("%t", "XdefeatsY", killer_name, g_iArenaScore[arena_index][killer_team_slot], victim_name, g_iArenaScore[arena_index][victim_team_slot], fraglimit, g_sArenaName[arena_index]);
-
-        if (!g_bNoStats && !g_bFourPersonArena[arena_index])
-            CalcELO(killer, victim);
-
-        else if (!g_bNoStats)
-            CalcELO2(killer, killer_teammate, victim, victim_teammate);
-
-	    //mgeme
-        if (MMMODE == TOURNAMENT_ACTIVE){
-            RemoveFromQueue(victim, false); //rfq(client, calcstats, specfix): calcstats would recalculate stats but they've already been calculated above. specfix makes sure to force player to spec.
-            RemoveFromQueue(killer, false);
-            MGEME_FinishMatch(killer, victim, arena_index, true);
+        if (g_bSeriesInProgress[arena_index]) {
+            g_iSeriesScore[arena_index][killer_team_slot]++;
+            StartNextSeriesGame(arena_index);
         } else {
+            char killer_name[128];
+            char victim_name[128];
+            GetClientName(killer, killer_name, sizeof(killer_name));
+            GetClientName(victim, victim_name, sizeof(victim_name));
+
+
+            if (g_bFourPersonArena[arena_index])
+            {
+                char killer_teammate_name[128];
+                char victim_teammate_name[128];
+
+                GetClientName(killer_teammate, killer_teammate_name, sizeof(killer_teammate_name));
+                GetClientName(victim_teammate, victim_teammate_name, sizeof(victim_teammate_name));
+
+                Format(killer_name, sizeof(killer_name), "%s and %s", killer_name, killer_teammate_name);
+                Format(victim_name, sizeof(victim_name), "%s and %s", victim_name, victim_teammate_name);
+            }
+
+            MC_PrintToChatAll("%t", "XdefeatsY", killer_name, g_iArenaScore[arena_index][killer_team_slot], victim_name, g_iArenaScore[arena_index][victim_team_slot], fraglimit, g_sArenaName[arena_index]);
+
+            if (!g_bNoStats && !g_bFourPersonArena[arena_index])
+                CalcELO(killer, victim);
+
+            else if (!g_bNoStats)
+                CalcELO2(killer, killer_teammate, victim, victim_teammate);
+
             if (!g_bFourPersonArena[arena_index])
             {
                 if (g_iArenaQueue[arena_index][SLOT_TWO + 1])
@@ -4324,6 +4378,7 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
                     CreateTimer(3.0, Timer_StartDuel, arena_index);
                 }
             }
+
         }
     }
     else if (g_bArenaAmmomod[arena_index] || g_bArenaMidair[arena_index])
@@ -4982,6 +5037,14 @@ public Action Timer_NewRound(Handle timer, any arena_index)
 public Action Timer_StartDuel(Handle timer, any arena_index)
 {
     ResetArena(arena_index);
+
+    if (MMMODE == TOURNAMENT_ACTIVE && !g_bSeriesInProgress[arena_index]) {
+        g_bSeriesInProgress[arena_index] = true;
+        g_iCurrentGame[arena_index] = 1;
+        g_iSeriesScore[arena_index][SLOT_ONE] = 0;
+        g_iSeriesScore[arena_index][SLOT_TWO] = 0;
+        g_iArenaFraglimit[arena_index] = 20; // Set frag limit to 20
+    }
 
     if (g_bArenaTurris[arena_index])
     {
