@@ -6,6 +6,11 @@
 
 "Phrases"
 {
+	"SeriesComplete"
+    	{
+       		"#format"    "{1:s},{2:d},{3:s},{4:d}"
+        	"en"        "{4}[MGE]{1} {1} wins the series {2}-{4} against {3}!"
+    	}
 	"MenuTitle" //No colors here.
 	{
 		"en"			"Join arena..."
