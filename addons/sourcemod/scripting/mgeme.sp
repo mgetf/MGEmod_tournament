@@ -8,7 +8,6 @@
 #include <sdkhooks>
 #include <morecolors>
 #include <ripext> //https://github.com/eldoradoel/sm-ripext-websocket			:-)
-#include <tf2attributes>
 
 // ====[ CONSTANTS ]===================================================
 #define PL_VERSION "3.0.1"
@@ -1541,16 +1540,15 @@ void ShowPlayerHud(int client)
 
     // Score
     SetHudTextParams(0.01, 0.01, HUDFADEOUTTIME, 255, 255, 255, 255);
-    char report[128];
+    char report[1024];
     int fraglimit = g_iArenaFraglimit[arena_index];
 
     if(g_bSeriesInProgress[arena_index]) {
-        Format(report, sizeof(report), "Arena %s. Series %d-%d (Game %d/3). Frag Limit(%d)", 
+        Format(report, sizeof(report), "Arena %s. Series %d-%d (Game %d/3)", 
             g_sArenaName[arena_index],
             g_iSeriesScore[arena_index][SLOT_ONE], 
             g_iSeriesScore[arena_index][SLOT_TWO],
-            g_iCurrentGame[arena_index],
-            fraglimit);
+            g_iCurrentGame[arena_index]);
     } else {
         if (g_bArenaBBall[arena_index])
         {
@@ -1903,6 +1901,9 @@ void RemoveFromQueue(int client, bool calcstats = false, bool specfix = false)
                 GetClientName(client, player_name, sizeof(player_name));
                 GetClientName(foe2, foe2_name, sizeof(foe2_name));
                 GetClientName(player_teammate, player_teammate_name, sizeof(player_teammate_name));
+
+                ClearGunboats(client);
+                ClearGunboats(foe);
 
                 Format(foe_name, sizeof(foe_name), "%s and %s", foe_name, foe2_name);
                 Format(player_name, sizeof(player_name), "%s and %s", player_name, player_teammate_name);
@@ -4051,6 +4052,11 @@ public Action Event_PlayerSpawn(Event event, const char[] name, bool dontBroadca
         g_bPlayerHasIntel[client] = false;
     }
 
+    EquipGunboats(client);
+
+}
+
+void EquipGunboats(int client) {
     // Re-equip gunboats if they should have them
     if (g_bShouldHaveGunboats[client] && g_tfctPlayerClass[client] == TFClass_Soldier)
     {
@@ -4062,7 +4068,7 @@ public Action Event_PlayerSpawn(Event event, const char[] name, bool dontBroadca
             TF2Attrib_RemoveByDefIndex(client, 135);
             // add new gunboats effect
             TF2Attrib_SetByDefIndex(client, 135, 0.4);
-            //disable slot2
+            // disable slot2
             TF2_RemoveWeaponSlot(client, 1);
 
         }
@@ -4257,7 +4263,11 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
         int raised_hp = RoundToNearest(float(g_iPlayerMaxHP[attacker]) * g_fArenaHPRatio[arena_index]);
         g_iPlayerHP[attacker] = raised_hp;
         SetEntProp(attacker, Prop_Data, "m_iHealth", raised_hp);
+        EquipGunboats(attacker);
     }
+
+    CreateTimer(0.5, Timer_ResetGunboats, attacker);
+    
 
     if (g_iArenaStatus[arena_index] < AS_FIGHT || g_iArenaStatus[arena_index] > AS_FIGHT)
     {
@@ -4871,6 +4881,11 @@ public Action Timer_CountDown(Handle timer, any arena_index)
     }
 }
 
+public Action Timer_ResetGunboats(Handle timer, int userid) {
+    PrintToServer("Timer_ResetGunboats");
+    EquipGunboats(userid);
+}
+
 public Action Timer_Tele(Handle timer, int userid)
 {
     int client = GetClientOfUserId(userid);
@@ -5039,6 +5054,7 @@ public Action Timer_StartDuel(Handle timer, any arena_index)
     ResetArena(arena_index);
 
     if (MMMODE == TOURNAMENT_ACTIVE && !g_bSeriesInProgress[arena_index]) {
+    //if (!g_bSeriesInProgress[arena_index]) {
         g_bSeriesInProgress[arena_index] = true;
         g_iCurrentGame[arena_index] = 1;
         g_iSeriesScore[arena_index][SLOT_ONE] = 0;
@@ -6144,6 +6160,8 @@ public Action Command_Gunboats(int client, int args)
         anySuccess = true;
         g_bShouldHaveGunboats[blu_f1] = true;
     }
+
+    // TODO make message go to both players
 
     if (anySuccess)
     {
