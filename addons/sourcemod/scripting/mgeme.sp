@@ -16,8 +16,6 @@
 #define HUDFADEOUTTIME 120.0
 #define MAPCONFIGFILE "configs/mgemod_spawns.cfg"
 
-#define GUNBOATS_ID 133
-bool g_bShouldHaveGunboats[MAXPLAYERS + 1];
 
 int g_iSeriesScore[MAXARENAS + 1][3]; // [arena][team] tracks series wins
 int g_iCurrentGame[MAXARENAS + 1]; // Tracks which game in the series (1-3)
@@ -437,8 +435,6 @@ public void OnPluginStart()
 
     AddCommandListener(Command_DropItem, "dropitem");
 
-    // from mge.tf
-    RegConsoleCmd("gb", Command_Gunboats, "Force both players to use gunboats");
     // Create the HUD text handles for later use.
     hm_HP           = CreateHudSynchronizer();
     hm_Score        = CreateHudSynchronizer();
@@ -1810,8 +1806,6 @@ void RemoveFromQueue(int client, bool calcstats = false, bool specfix = false)
         return;
     }
 
-    ClearGunboats(client);
-
     int player_slot = g_iPlayerSlot[client];
     g_iPlayerArena[client] = 0;
     g_iPlayerSlot[client] = 0;
@@ -1901,9 +1895,6 @@ void RemoveFromQueue(int client, bool calcstats = false, bool specfix = false)
                 GetClientName(client, player_name, sizeof(player_name));
                 GetClientName(foe2, foe2_name, sizeof(foe2_name));
                 GetClientName(player_teammate, player_teammate_name, sizeof(player_teammate_name));
-
-                ClearGunboats(client);
-                ClearGunboats(foe);
 
                 Format(foe_name, sizeof(foe_name), "%s and %s", foe_name, foe2_name);
                 Format(player_name, sizeof(player_name), "%s and %s", player_name, player_teammate_name);
@@ -4052,60 +4043,7 @@ public Action Event_PlayerSpawn(Event event, const char[] name, bool dontBroadca
         g_bPlayerHasIntel[client] = false;
     }
 
-    EquipGunboats(client);
-
 }
-
-void EquipGunboats(int client) {
-    // Re-equip gunboats if they should have them
-    if (g_bShouldHaveGunboats[client] && g_tfctPlayerClass[client] == TFClass_Soldier)
-    {
-
-        if (!HasGunboatsEquipped(client)) {
-            
-            PrintToChat(client, "respawned with fake gunboats, because someone used the !gb command");
-            // remove existing gunboats effect
-            TF2Attrib_RemoveByDefIndex(client, 135);
-            // add new gunboats effect
-            TF2Attrib_SetByDefIndex(client, 135, 0.4);
-            // disable slot2
-            TF2_RemoveWeaponSlot(client, 1);
-
-        }
-    }
-
-}
-
-bool HasGunboatsEquipped(int client)
-{
-    // Loop through all wearable entities on the client
-    int i = -1;
-    while ((i = FindEntityByClassname(i, "tf_wearable*")) != -1)
-    {
-        if (GetEntPropEnt(i, Prop_Send, "m_hOwnerEntity") == client)
-        {
-            int itemdef = GetEntProp(i, Prop_Send, "m_iItemDefinitionIndex");
-            // 133 is the item definition index for gunboats
-            if (itemdef == 133)
-                return true;
-        }
-    }
-    return false;
-}
-
-void ClearGunboats(int client)
-{
-    if (g_bShouldHaveGunboats[client])
-    {
-        g_bShouldHaveGunboats[client] = false;
-        if (IsValidClient(client))
-        {
-            TF2Attrib_RemoveByDefIndex(client, 135);
-            TF2_RegeneratePlayer(client);
-        }
-    }
-}
-
 
 public Action Event_WinPanel(Event event, const char[] name, bool dontBroadcast)
 {
@@ -4263,11 +4201,7 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
         int raised_hp = RoundToNearest(float(g_iPlayerMaxHP[attacker]) * g_fArenaHPRatio[arena_index]);
         g_iPlayerHP[attacker] = raised_hp;
         SetEntProp(attacker, Prop_Data, "m_iHealth", raised_hp);
-        EquipGunboats(attacker);
     }
-
-    CreateTimer(0.5, Timer_ResetGunboats, attacker);
-    
 
     if (g_iArenaStatus[arena_index] < AS_FIGHT || g_iArenaStatus[arena_index] > AS_FIGHT)
     {
@@ -4324,10 +4258,6 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
 
     if (g_iArenaStatus[arena_index] >= AS_FIGHT && g_iArenaStatus[arena_index] < AS_REPORTED && fraglimit > 0 && g_iArenaScore[arena_index][killer_team_slot] >= fraglimit)
     {
-        //clear gunboats from both players
-        ClearGunboats(killer);
-        ClearGunboats(victim);
-
         g_iArenaStatus[arena_index] = AS_REPORTED;
 
         if (g_bSeriesInProgress[arena_index]) {
@@ -4879,11 +4809,6 @@ public Action Timer_CountDown(Handle timer, any arena_index)
             return Plugin_Stop;
         }
     }
-}
-
-public Action Timer_ResetGunboats(Handle timer, int userid) {
-    PrintToServer("Timer_ResetGunboats");
-    EquipGunboats(userid);
 }
 
 public Action Timer_Tele(Handle timer, int userid)
@@ -6121,61 +6046,6 @@ public Action Command_Mge(int client, int args)
 
     return Plugin_Handled;
 }
-
-public Action Command_Gunboats(int client, int args)
-{
-    if (!IsValidClient(client))
-        return Plugin_Continue;
-        
-    int arena_index = g_iPlayerArena[client];
-    if (!arena_index)
-    {
-        MC_PrintToChat(client, "You must be in an arena to use this command!");
-        return Plugin_Handled;
-    }
-
-    int player_slot = g_iPlayerSlot[client];
-    if (player_slot > SLOT_TWO && !g_bFourPersonArena[arena_index])
-    {
-        MC_PrintToChat(client, "You must be in the arena to use this command!");
-        return Plugin_Handled;
-    }
-
-    // Get both players in the arena
-    int red_f1 = g_iArenaQueue[arena_index][SLOT_ONE];
-    int blu_f1 = g_iArenaQueue[arena_index][SLOT_TWO];
-
-    bool anySuccess = false;
-
-    // Try to equip gunboats for first player if they're a Soldier
-    if (IsValidClient(red_f1) && g_tfctPlayerClass[red_f1] == TFClass_Soldier)
-    {
-        anySuccess = true;
-        g_bShouldHaveGunboats[red_f1] = true;
-    }
-
-    // Try to equip gunboats for second player if they're a Soldier
-    if (IsValidClient(blu_f1) && g_tfctPlayerClass[blu_f1] == TFClass_Soldier)
-    {
-        anySuccess = true;
-        g_bShouldHaveGunboats[blu_f1] = true;
-    }
-
-    // TODO make message go to both players
-
-    if (anySuccess)
-    {
-        MC_PrintToChat(client, "both players are now wearing gunboats");
-    }
-    else
-    {
-        MC_PrintToChat(client, "Both players must be Soldiers to use gunboats!");
-    }
-
-    return Plugin_Handled;
-}
-
-
 
 public void UpdateArenaName(int arena)
 {
