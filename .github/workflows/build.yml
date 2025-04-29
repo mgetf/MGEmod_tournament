@@ -27,7 +27,7 @@ jobs:
     - name: Compile plugins
       run: |
         pwd
-        spcomp -i"./addons/sourcemod/scripting/include/" addons/sourcemod/scripting/mge.sp -o ./addons/sourcemod/plugins/mge.smx
+        spcomp -i"./addons/sourcemod/scripting/include/" addons/sourcemod/scripting/mgeme.sp -o ./addons/sourcemod/plugins/mgeme.smx
         ls -la
 
     - name: Download maps that are too large to put on github
