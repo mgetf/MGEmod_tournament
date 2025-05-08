@@ -470,6 +470,7 @@ public void OnAllPluginsLoaded()
     if (!isMapAm)
     {
         SetFailState("Map not supported. MGEMod disabled.");
+        return;
     }
 	char txtfile[256];
 	BuildPath(Path_SM, txtfile, sizeof(txtfile), "configs/mge_me.cfg");
