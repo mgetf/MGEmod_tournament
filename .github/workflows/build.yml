@@ -1,23 +1,27 @@
-name: release
+name: Build and Release on Commit
 # modified from https://github.com/nosoop/NinjaBuild-SMPlugin/blob/master/contrib/github-workflow/build-on-version-tag-push.yml
 
 on:
   push:
-    tags:
-    - 'v*'
+    branches:
+      - '*' # Triggers on pushes to any branch
+      # To avoid loops where a tag pushed by the release action re-triggers the workflow,
+      # we are removing the direct trigger on tags. The release action will create the tag.
+    # tags:
+    #  - 'v*'
 
 jobs:
   run:
-    name: Run action
+    name: Build and Release
     runs-on: ubuntu-latest
 
-    # skip build on '[ci skip]'
-    if: "!contains(github.event.head_commit.message, '[ci skip]')"
+    if: "!contains(github.event.head_commit.message, '[ci skip]') && !startsWith(github.ref, 'refs/tags/')" # Also skip if the trigger was a tag push, to prevent loops
 
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
+        fetch-depth: 0 # Required to get commit count for versioning
 
     - name: Setup SourcePawn Compiler
       uses: rumblefrog/setup-sp@master
@@ -30,12 +34,11 @@ jobs:
         spcomp -i"./addons/sourcemod/scripting/include/" addons/sourcemod/scripting/mgeme.sp -o ./addons/sourcemod/plugins/mgeme.smx
         ls -la
 
-    - name: Download maps that are too large to put on github
+    - name: Download maps
       run: |
         cd maps
         wget "https://sappho.io/files/tf/maps/mge_chillypunch_final4_fix2.bsp" || exit 1
         echo "eae52bc16d6cb872938e67b4fc9b845c9f227e5d444614254465fe6530480a0e mge_chillypunch_final4_fix2.bsp" | sha256sum -c || exit 2
-
 
     - name: Zip packages
       run: |
@@ -44,13 +47,27 @@ jobs:
         ls -la
         pwd
 
-    - name: Release
-      uses: softprops/action-gh-release@v1
-      if: startsWith(github.ref, 'refs/tags/')
+    - name: Generate version string
+      id: version
+      run: |
+        # This creates a version like v0.123.0 where 123 is the total commit count
+        echo "TAG_NAME=v0.$(git rev-list --count HEAD).0" >> $GITHUB_OUTPUT
+
+    - name: Upload mge.zip artifact
+      uses: actions/upload-artifact@v4
       with:
+        name: mge-package-${{ steps.version.outputs.TAG_NAME }}
+        path: build/mge.zip
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.TAG_NAME }}
+        name: "Release ${{ steps.version.outputs.TAG_NAME }}"
         files: |
           ./build/mge.zip
         fail_on_unmatched_files: true
         generate_release_notes: true
-        # if: contains(github.ref, 'beta')
-        # prerelease: true
+        prerelease: true # Mark these automated commit-based releases as pre-releases
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
