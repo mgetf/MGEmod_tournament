@@ -5,6 +5,7 @@ docker run --rm \
   -v "$PWD/..":/src \
   spcomp:1.12 \
   -i /opt/addons/sourcemod/scripting/include/ \
+  -i /src/addons/sourcemod/scripting/include/ \
   /src/addons/sourcemod/scripting/ladder.sp \
   -o /src/addons/sourcemod/plugins/ladder.smx
 
