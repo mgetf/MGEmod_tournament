@@ -1,0 +1,178 @@
+
+Alright, to connect all the dots for your "ultra-thin" `ladder.sp` plugin, which will be primarily controlled by your Rust backend, here's a breakdown of the essential components and structure you'll need to add or significantly adapt from what you have (which I understand currently includes `LoadSpawnPoints`, a version of `ResetPlayer`, and `Timer_Tele`):
+
+**I. Core Setup and Configuration:**
+
+1.  **Includes:**
+    *   `#include <sourcemod>`
+    *   `#include <tf2_stocks>`
+    *   `#include <ripext>` (or your chosen WebSocket library)
+    *   `#include <json>` (if you plan to use JSON for WebSocket messages, highly recommended for structured data)
+2.  **Global Variables:**
+    *   **WebSocket:**
+        ```sourcepawn
+        WebSocket ws;
+        char g_sWsHost[64];
+        char g_sWsPort[8];
+        char g_sWsApiKey[256];
+        char g_sWsEndpoint[128]; // e.g., "ws://host:port/tf2ladder"
+        bool g_bWsConnected = false;
+        Handle g_hWsReconnectTimer = null;
+        ```
+    *   **Spawn Data (largely from your existing code):**
+        ```sourcepawn
+        char g_sMapName[64];
+        char g_spawnFile[128]; // To be loaded from config
+        ConVar gcvar_spawnFile; // To make it configurable
+        int g_iArenaCount;
+        // char g_sArenaOriginalName[MAXARENAS + 1][64]; // Optional if Rust doesn't need names
+        float g_fArenaSpawnOrigin[MAXARENAS + 1][MAXSPAWNS + 1][3];
+        float g_fArenaSpawnAngles[MAXARENAS + 1][MAXSPAWNS + 1][3];
+        int g_iArenaSpawns[MAXARENAS + 1]; // Number of spawns per arena
+        ```
+    *   **Minimal Player Context (Optional but helpful for event reporting):**
+        ```sourcepawn
+        // int g_iPlayerAssignedArena[MAXPLAYERS + 1]; // Stores which arena Rust THINKS this player is in
+        ```
+3.  **`OnPluginStart()`:**
+    *   Load plugin translations if any.
+    *   Create ConVars:
+        *   `CreateConVar("sm_ladder_version", "0.1.0", "Ladder Plugin Version", FCVAR_SPONLY | FCVAR_NOTIFY);`
+        *   `gcvar_spawnFile = CreateConVar("sm_ladder_spawnfile", "configs/ladder_spawns.cfg", "Spawn configuration file for the ladder plugin");`
+    *   Hook `gcvar_spawnFile` change if needed.
+    *   Get initial `g_spawnFile` string.
+    *   Call a function to load WebSocket configuration (e.g., `LoadWebSocketConfig()`).
+    *   Hook non-map-specific events:
+        *   `HookEvent("player_connect_full", Event_PlayerConnectFull, EventHookMode_Post);`
+        *   `HookEvent("client_disconnect", Event_ClientDisconnect, EventHookMode_Post);`
+        *   `HookEvent("client_putinserver", Event_ClientPutInServer, EventHookMode_Post);` // After full auth
+4.  **`LoadWebSocketConfig()` (New Function):**
+    *   Reads `configs/ladder_websocket.cfg` (or similar) using KeyValues.
+    *   Populates `g_sWsHost`, `g_sWsPort`, `g_sWsApiKey`, `g_sWsEndpoint`.
+5.  **`OnAllPluginsLoaded()` (or deferred from `OnPluginStart`):**
+    *   Call `ConnectWebSocket()`.
+6.  **`OnPluginEnd()`:**
+    *   If `g_hWsReconnectTimer != null`, kill it.
+    *   `if (ws != null && g_bWsConnected) ws.Close();`
+    *   Unhook events.
+7.  **`OnMapStart()`:**
+    *   `LoadSpawnPoints();` (Your existing function).
+    *   Inform Rust that a new map is loaded and what arenas are available (send a WebSocket message).
+    *   Hook map-specific events:
+        *   `HookEvent("player_death", Event_PlayerDeath, EventHookMode_Pre);`
+        *   `HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);`
+8.  **`OnMapEnd()`:**
+    *   Unhook map-specific events.
+
+**II. WebSocket Connection and Communication:**
+
+1.  **`ConnectWebSocket()` (New Function):**
+    *   Construct full WebSocket URL using `g_sWsHost`, `g_sWsPort`, `g_sWsEndpoint`.
+    *   `ws = new WebSocket(full_url);`
+    *   `ws.SetConnectCallback(WsCallback_Connected);`
+    *   `ws.SetDisconnectCallback(WsCallback_Disconnected);`
+    *   `ws.SetErrorCallback(WsCallback_Error);`
+    *   `ws.SetMessageCallback(WsCallback_MessageReceived);` // For ripext, or `SetReadCallback` for others
+    *   Add API Key to headers if your library supports it, otherwise, plan to send it in the first message post-connection.
+    *   `ws.Connect();`
+2.  **`WsCallback_Connected(WebSocket socket, any data)`:**
+    *   `g_bWsConnected = true;`
+    *   `KillTimer(g_hWsReconnectTimer); g_hWsReconnectTimer = null;`
+    *   Log "Connected to Rust backend."
+    *   Send an initial "hello" or "server_ready" message to Rust, perhaps including API key, map name, and number of arenas.
+3.  **`WsCallback_Disconnected(WebSocket socket, bool wasCloseFrameSent, const char[] reason, any data)`:**
+    *   `g_bWsConnected = false;`
+    *   Log "Disconnected from Rust backend. Reason: %s", reason`.
+    *   `if (g_hWsReconnectTimer == null) g_hWsReconnectTimer = CreateTimer(5.0, Timer_AttemptWsReconnect, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);`
+4.  **`WsCallback_Error(WebSocket socket, const char[] error, any data)`:**
+    *   Log "WebSocket Error: %s", error`.
+    *   (Consider if this should also trigger reconnection attempts).
+5.  **`Timer_AttemptWsReconnect(Handle timer, any data)`:**
+    *   `if (!g_bWsConnected) ConnectWebSocket();`
+6.  **`WsCallback_MessageReceived(WebSocket socket, const char[] message, int len, any data)` (or using KeyValues if JSON):**
+    *   This is your central command processor.
+    *   Parse the message (e.g., from JSON string to a `KeyValues` object).
+    *   Identify the command type (e.g., `kv.GetString("command_type", ...)`).
+    *   Use a `switch` or `if/else if` block to call specific handler functions based on the command.
+    *   Example:
+        ```sourcepawn
+        KeyValues kv = new KeyValues("rust_command");
+        if (kv.ImportFromString(message)) { // Or use a JSON parsing function
+            char command[64];
+            kv.GetString("command", command, sizeof(command));
+            if (StrEqual(command, "setup_player")) {
+                // Extract params: steamid, arena_id, slot_id, class, health, team
+                // Call Execute_SetupPlayer(params...);
+            } else if (StrEqual(command, "move_to_spec")) {
+                // Extract params: steamid
+                // Call Execute_MoveToSpec(params...);
+            } // ... etc.
+        }
+        delete kv;
+        ```
+7.  **`SendWebsocketMessage(const char[] json_string)` (Helper function):**
+    *   `if (g_bWsConnected && ws != null) ws.Send(json_string);`
+
+**III. Command Execution Functions (Called from `WsCallback_MessageReceived`):**
+
+*   **`Execute_SetupPlayer(const char[] steamid64, int arena_id, int logical_slot_id, TFClassType class, int health, TFTeam team)`:**
+    *   `int client = GetClientFromSteamID64(steamid64);`
+    *   If `client` is valid:
+        *   `ChangeClientTeam(client, team);`
+        *   `TF2_SetPlayerClass(client, class);`
+        *   `TF2_RespawnPlayer(client);` (This will trigger `OnPlayerSpawn` which can then do the teleport and health set).
+        *   Store `arena_id` and `logical_slot_id` with the client for the `OnPlayerSpawn` handler.
+*   **`Execute_TeleportPlayer(int client, int arena_id, int logical_spawn_slot_id)`:**
+    *   (Adapt logic from your `Timer_Tele` to find the correct `g_fArenaSpawnOrigin` and `g_fArenaSpawnAngles` based on `arena_id` and `logical_spawn_slot_id`).
+    *   `TeleportEntity(client, origin, angles, velocity_zero);`
+*   **`Execute_SetPlayerHealth(int client, int health)`:**
+    *   `SetEntProp(client, Prop_Data, "m_iHealth", health);`
+    *   `SetEntProp(client, Prop_Data, "m_iMaxHealth", health);` // Optional, depends on how you want health to work
+*   **`Execute_MoveToSpec(const char[] steamid64)`:**
+    *   `int client = GetClientFromSteamID64(steamid64);`
+    *   If `client` is valid: `ChangeClientTeam(client, TFTeam_Spectator);`
+*   **`Execute_PrintToPlayerChat(const char[] steamid64, const char[] text_message)`:**
+    *   `int client = GetClientFromSteamID64(steamid64);`
+    *   If `client` is valid: `PrintToChat(client, "%s", text_message);`
+
+**IV. Event Forwarding to Rust:**
+
+*   For each hooked event (e.g., `Event_PlayerDeath`):
+    *   Gather necessary data (victim SteamID, attacker SteamID, weapon, positions).
+    *   Construct a JSON string.
+    *   Call `SendWebsocketMessage(json_string);`
+    *   Example `Event_PlayerDeath`:
+        ```sourcepawn
+        public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast) {
+            int victim = GetClientOfUserId(event.GetInt("userid"));
+            int attacker = GetClientOfUserId(event.GetInt("attacker"));
+            // ... (get SteamIDs, weapon, etc.) ...
+            char json_buffer[512];
+            Format(json_buffer, sizeof(json_buffer), 
+                "{\"event_type\":\"player_death\", \"victim_sid64\":\"%s\", \"attacker_sid64\":\"%s\", ...}", 
+                victim_sid64, attacker_sid64);
+            SendWebsocketMessage(json_buffer);
+            return Plugin_Continue;
+        }
+        ```
+*   **`Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)`:**
+    *   This is a good place to finalize player setup commanded by Rust.
+    *   `int client = GetClientOfUserId(event.GetInt("userid"));`
+    *   If this client has pending setup data (arena, slot, health) from a recent `Execute_SetupPlayer` command:
+        *   Call `Execute_TeleportPlayer(client, stored_arena_id, stored_logical_slot_id);`
+        *   Call `Execute_SetPlayerHealth(client, stored_health);`
+        *   Clear pending setup data for this client.
+    *   Then, forward the raw spawn event to Rust.
+
+**V. Utility Functions:**
+
+*   **`GetClientFromSteamID64(const char[] steamid_64)` (Essential):**
+    *   Iterate `1` to `MaxClients`.
+    *   If `IsClientInGame(i) && IsClientAuthorized(i)`:
+        *   Get `AuthId_SteamID64` for client `i`.
+        *   If it matches `steamid_64`, return `i`.
+    *   Return `0` or `-1` if not found.
+*   (Keep `LoadSpawnPoints()` as is).
+*   Your `ResetPlayer` and `Timer_Tele` will be heavily refactored/their logic absorbed into the `Execute_` functions and `Event_PlayerSpawn`.
+
+This structure makes `ladder.sp` a reactive agent. It loads map data, listens for commands from Rust, executes them precisely, and reports raw game events back. All the "intelligence" and "match state" live in Rust.

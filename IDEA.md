@@ -1,0 +1,3 @@
+A 2v2 ladder duo queue TF2 server where players can only enter matches with a mutually selected partner. Matches run in synchronized rounds: all matches start together, and the next round only begins once every match ends. Winners move up the ladder, losers move down. Top-rank match winners earn ladder points. Duo queue is enforced via a command-based opt-in system (!add + mutual acceptance).
+
+what if we _only_ kept the spawn parsing, respawning logic, and the websockets. and controlled the entire ladder logic from a (rust) program sending websocket commands. the sourcemod is thin: it only receives arenas+player combos, and sends out match finished notifs...
