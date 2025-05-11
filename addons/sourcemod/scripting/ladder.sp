@@ -1,5 +1,5 @@
 
 public void OnPluginStart()
 {
-	PrintToServer("OIEANAORISENAOIRESNAORIESNAORISEN");
+	PrintToServer("OIEANAORISENAOIRESNAORIESNAORISEN---------------------------------------------------------");
 }
