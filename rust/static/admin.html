@@ -20,10 +20,8 @@
       socket.onopen = () => { sm({type: 'Init', payload: {}}) }
 
       socket.onmessage = (event) => {
-        const data = JSON.parse(event.data)
-        const { target_id, html_content } = data.payload
-        const node = document.getElementById(target_id)
-        Idiomorph.morph(node, html_content)
+        const { target_id, html_content } = JSON.parse(event.data).payload
+        Idiomorph.morph(document.getElementById(target_id), html_content)
       }
 
       socket.onclose = () => {
