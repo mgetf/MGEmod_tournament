@@ -17,24 +17,36 @@ struct Player {
     name: String,
 }
 
+// Browser-specific messages
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", content = "payload")]
-enum MessagePayload {
-    // receiving
-    ServerHello {},
+enum BrowserCommand {
     Init {},
-    TeleportPlayer {
-        steamid: String,
-    },
-    // sending
+    TeleportPlayer { steamid: String },
+}
+
+// Server-specific messages
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(tag = "type", content = "payload")]
+enum ServerCommand {
+    ServerHello {},
+}
+
+// Responses to browsers
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(tag = "type", content = "payload")]
+enum BrowserResponse {
+    Error { message: String },
+    IdiomorphUpdate { target_id: String, html_content: String },
+}
+
+// Responses to servers
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(tag = "type", content = "payload")]
+enum ServerResponse {
     ServerAck {},
-    Error {
-        message: String,
-    },
-    IdiomorphUpdate {
-        target_id: String,
-        html_content: String,
-    },
+    TeleportPlayer { steamid: String },
+    Error { message: String },
 }
 
 struct AppState {
@@ -44,71 +56,167 @@ struct AppState {
 use crate::server::Ladder;
 use actix::prelude::*;
 
-// https://github.com/actix/examples/blob/master/websockets/chat/src/server.rs
-struct ServerWs {
-    addr: Addr<Ladder>,
-}
-impl Actor for ServerWs {
-    type Context = ws::WebsocketContext<Self>;
-}
-
+// Message to forward browser commands to the ladder
 #[derive(Message)]
 #[rtype(result = "()")]
-struct ForwardMessage {
-    message: MessagePayload,
-    from: Addr<ServerWs>,
+struct BrowserMsg {
+    command: BrowserCommand,
+    from: Addr<admin_ws::AdminWs>,
 }
 
-impl Handler<ForwardMessage> for ServerWs {
-    type Result = ();
+// Message to forward server commands to the ladder
+#[derive(Message)]
+#[rtype(result = "()")]
+struct ServerMsg {
+    command: ServerCommand,
+    from: Addr<server_ws::GameServerWs>,
+}
 
-    fn handle(&mut self, msg: ForwardMessage, ctx: &mut Self::Context) {
-        println!("Forwarding message: {:?}", msg.message);
-        let st = serde_json::to_string(&msg.message).unwrap();
-        ctx.text(st);
+// Admin WebSocket handler
+mod admin_ws {
+    use super::*;
+
+    pub struct AdminWs {
+        pub ladder: Addr<Ladder>,
     }
-}
 
-impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ServerWs {
-    fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
-        match msg {
-            Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
-            Ok(ws::Message::Pong(_)) => println!("Pong received"),
-            Ok(ws::Message::Text(text)) => {
-                println!("Text received: {}", text);
-                let parsed: Result<MessagePayload, serde_json::Error> = serde_json::from_str(&text);
-                match parsed {
-                    Ok(p) => {
-                        self.addr.do_send(ForwardMessage {
-                            message: p,
-                            from: ctx.address(),
-                        });
-                    }
-                    Err(e) => {
-                        self.addr.do_send(ForwardMessage {
-                            message: MessagePayload::Error {
+    impl Actor for AdminWs {
+        type Context = ws::WebsocketContext<Self>;
+    }
+
+    impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for AdminWs {
+        fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
+            match msg {
+                Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
+                Ok(ws::Message::Pong(_)) => println!("Pong received"),
+                Ok(ws::Message::Text(text)) => {
+                    println!("Admin text received: {}", text);
+                    let parsed: Result<BrowserCommand, serde_json::Error> = serde_json::from_str(&text);
+                    match parsed {
+                        Ok(cmd) => {
+                            self.ladder.do_send(BrowserMsg {
+                                command: cmd,
+                                from: ctx.address(),
+                            });
+                        }
+                        Err(e) => {
+                            let error_resp = BrowserResponse::Error {
                                 message: e.to_string(),
-                            },
-                            from: ctx.address(),
-                        });
+                            };
+                            let st = serde_json::to_string(&error_resp).unwrap();
+                            ctx.text(st);
+                        }
                     }
                 }
+                Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
+                _ => (),
             }
-            Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
-            _ => (),
+        }
+    }
+
+    // Add response handler for AdminWs
+    #[derive(Message)]
+    #[rtype(result = "()")]
+    pub struct AdminResponse {
+        pub response: BrowserResponse,
+    }
+
+    impl Handler<AdminResponse> for AdminWs {
+        type Result = ();
+
+        fn handle(&mut self, msg: AdminResponse, ctx: &mut Self::Context) {
+            let st = serde_json::to_string(&msg.response).unwrap();
+            ctx.text(st);
         }
     }
 }
 
-async fn server_route(
+// Game Server WebSocket handler
+mod server_ws {
+    use super::*;
+
+    pub struct GameServerWs {
+        pub ladder: Addr<Ladder>,
+    }
+
+    impl Actor for GameServerWs {
+        type Context = ws::WebsocketContext<Self>;
+    }
+
+    impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for GameServerWs {
+        fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
+            match msg {
+                Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
+                Ok(ws::Message::Pong(_)) => println!("Pong received"),
+                Ok(ws::Message::Text(text)) => {
+                    println!("Server text received: {}", text);
+                    let parsed: Result<ServerCommand, serde_json::Error> = serde_json::from_str(&text);
+                    match parsed {
+                        Ok(cmd) => {
+                            self.ladder.do_send(ServerMsg {
+                                command: cmd,
+                                from: ctx.address(),
+                            });
+                        }
+                        Err(e) => {
+                            let error_resp = ServerResponse::Error {
+                                message: e.to_string(),
+                            };
+                            let st = serde_json::to_string(&error_resp).unwrap();
+                            ctx.text(st);
+                        }
+                    }
+                }
+                Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
+                _ => (),
+            }
+        }
+    }
+
+    // Add response handler for GameServerWs
+    #[derive(Message)]
+    #[rtype(result = "()")]
+    pub struct ServerResponseMsg {
+        pub response: ServerResponse,
+    }
+
+    impl Handler<ServerResponseMsg> for GameServerWs {
+        type Result = ();
+
+        fn handle(&mut self, msg: ServerResponseMsg, ctx: &mut Self::Context) {
+            let st = serde_json::to_string(&msg.response).unwrap();
+            ctx.text(st);
+        }
+    }
+}
+
+async fn admin_ws_route(
     req: HttpRequest,
     data: web::Data<AppState>,
     stream: web::Payload,
 ) -> Result<HttpResponse, Error> {
     let t: &actix::Addr<server::Ladder> = &data.ladder;
+    let resp = ws::start(
+        admin_ws::AdminWs { ladder: t.clone() },
+        &req,
+        stream,
+    );
+    println!("admin connection: {:?}", resp);
+    resp
+}
 
-    let resp = ws::start(ServerWs { addr: t.clone() }, &req, stream);
-    println!("server!!! {:?}", resp);
+async fn server_ws_route(
+    req: HttpRequest,
+    data: web::Data<AppState>,
+    stream: web::Payload,
+) -> Result<HttpResponse, Error> {
+    let t: &actix::Addr<server::Ladder> = &data.ladder;
+    let resp = ws::start(
+        server_ws::GameServerWs { ladder: t.clone() },
+        &req,
+        stream,
+    );
+    println!("server connection: {:?}", resp);
     resp
 }
 
@@ -124,7 +232,6 @@ use actix_web::rt::task;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // read api_key.txt
     let ladder = Ladder::new().start();
 
     HttpServer::new(move || {
@@ -132,7 +239,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(AppState {
                 ladder: ladder.clone(),
             }))
-            .route("/endpoint", web::get().to(server_route))
+            .route("/admin_ws", web::get().to(admin_ws_route))
+            .route("/server_ws", web::get().to(server_ws_route))
             .route("/admin", web::get().to(admin))
             .route("/", web::get().to(index))
     })
