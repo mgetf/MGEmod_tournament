@@ -28,6 +28,10 @@ enum MessagePayload {
     Error {
         message: String,
     },
+    IdiomorphUpdate {
+        target_id: String,
+        html_content: String,
+    },
 }
 
 struct AppState {

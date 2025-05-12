@@ -17,13 +17,13 @@
 
       socket = new WebSocket(wsUri)
 
-      socket.onopen = () => {
-        console.log('Connected')
-      }
+      socket.onopen = () => { sm({type: 'Init', payload: {}}) }
 
-      socket.onmessage = ({target, newnode}) => {
-        const node = document.getElementById(target)
-        Idiomorph.morph(node, newnode)
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data)
+        const { target_id, html_content } = data.payload
+        const node = document.getElementById(target_id)
+        Idiomorph.morph(node, html_content)
       }
 
       socket.onclose = () => {
@@ -33,7 +33,6 @@
 
       function sm(o) { socket.send(JSON.stringify(o)) }
     </script>
-    <button id="send" onclick="sm({type: 'Init', payload: {}})">Send</button>
     <div id="app">
     </div>
   </body>
