@@ -1,7 +1,120 @@
+#pragma semicolon 1
 #include <sourcemod>
 #include <ripext>
 
-WebSocket g_hWebSocket; // Declare a global WebSocket handle
+#define MAXARENAS 63
+#define MAXSPAWNS 15
+#define MAPCONFIGFILE "configs/mgemod_spawns.cfg"
+
+WebSocket g_hWebSocket; 
+
+// Global Variables
+char g_sMapName[64];
+
+int g_iArenaCount;
+int g_iArenaSpawns[MAXARENAS + 1];
+
+char g_sArenaName[MAXARENAS + 1][64];
+
+float g_fArenaSpawnOrigin     [MAXARENAS + 1][MAXSPAWNS+1][3];
+float g_fArenaSpawnAngles     [MAXARENAS + 1][MAXSPAWNS+1][3];
+
+bool LoadSpawnPoints() {
+    char txtfile[256];
+    BuildPath(Path_SM, txtfile, sizeof(txtfile), MAPCONFIGFILE);
+
+    char spawn[64];
+    GetCurrentMap(g_sMapName, sizeof(g_sMapName));
+
+    KeyValues kv = new KeyValues("SpawnConfig");
+
+    char spawnCo[6][16];
+    char kvmap[32];
+    int count;
+    int i;
+    g_iArenaCount = 0;
+
+    for (int j = 0; j <= MAXARENAS; j++)
+    {
+        g_iArenaSpawns[j] = 0;
+    }
+
+    if (FileToKeyValues(kv, txtfile))
+    {
+        if (KvGotoFirstSubKey(kv))
+        {
+            do
+            {
+                KvGetSectionName(kv, kvmap, 64);
+                if (StrEqual(g_sMapName, kvmap, false))
+                {
+                    if (KvGotoFirstSubKey(kv))
+                    {
+                        do
+                        {
+                            g_iArenaCount++;
+                            KvGetSectionName(kv, g_sArenaName[g_iArenaCount], 64);
+                            int id;
+                            if (KvGetNameSymbol(kv, "1", id))
+                            {
+                                char intstr[4];
+                                char intstr2[4];
+                                do
+                                {
+                                    g_iArenaSpawns[g_iArenaCount]++;
+                                    IntToString(g_iArenaSpawns[g_iArenaCount], intstr, sizeof(intstr));
+                                    IntToString(g_iArenaSpawns[g_iArenaCount]+1, intstr2, sizeof(intstr2));
+                                    KvGetString(kv, intstr, spawn, sizeof(spawn));
+                                    count = ExplodeString(spawn, " ", spawnCo, 6, 16);
+                                    if (count==6)
+                                    {
+                                        for (i=0; i<3; i++)
+                                        {
+                                            g_fArenaSpawnOrigin[g_iArenaCount][g_iArenaSpawns[g_iArenaCount]][i] = StringToFloat(spawnCo[i]);
+                                        }
+                                        for (i=3; i<6; i++)
+                                        {
+                                            g_fArenaSpawnAngles[g_iArenaCount][g_iArenaSpawns[g_iArenaCount]][i-3] = StringToFloat(spawnCo[i]);
+                                        }
+                                    } else if(count==4) {
+                                        for (i=0; i<3; i++)
+                                        {
+                                            g_fArenaSpawnOrigin[g_iArenaCount][g_iArenaSpawns[g_iArenaCount]][i] = StringToFloat(spawnCo[i]);
+                                        }
+                                        g_fArenaSpawnAngles[g_iArenaCount][g_iArenaSpawns[g_iArenaCount]][0] = 0.0;
+                                        g_fArenaSpawnAngles[g_iArenaCount][g_iArenaSpawns[g_iArenaCount]][1] = StringToFloat(spawnCo[3]);
+                                        g_fArenaSpawnAngles[g_iArenaCount][g_iArenaSpawns[g_iArenaCount]][2] = 0.0;
+                                    } else {
+                                        SetFailState("Error in cfg file. Wrong number of parametrs (%d) on spawn <%i> in arena <%s>",count,g_iArenaSpawns[g_iArenaCount],g_sArenaName[g_iArenaCount]);
+                                    }
+                                } while (KvGetNameSymbol(kv, intstr2, id));
+                                LogMessage("Loaded %d spawns on arena %s.",g_iArenaSpawns[g_iArenaCount], g_sArenaName[g_iArenaCount]);
+                            } else {
+                                LogError("Could not load spawns on arena %s.", g_sArenaName[g_iArenaCount]);
+                            }
+                        } while (KvGotoNextKey(kv));
+                    }
+                    break;
+                }
+            } while (KvGotoNextKey(kv));
+            if (g_iArenaCount)
+            {
+                LogMessage("Loaded %d arenas. MGEMod enabled.",g_iArenaCount);
+                CloseHandle(kv);
+                return true;
+            } else {
+                CloseHandle(kv);
+                return false;
+            }
+        } else {
+            LogError("Error in cfg file.");
+            return false;
+        }
+    } else {
+        LogError("Error. Can't find cfg file");
+        return false;
+    }
+}
 
 public void OnPluginStart()
 {
@@ -32,6 +145,13 @@ public void OnAllPluginsLoaded()
 	g_hWebSocket.SetDisconnectCallback(wsDisconnCallback);
 
 	PrintToServer("Attempting to connect to WebSocket: %s", szUrl);
+	
+    int isMapAm = LoadSpawnPoints();
+    if (!isMapAm)
+    {
+        SetFailState("Map not supported. Laddermod disabled.");
+        return;
+    }
 }
 
 public void OnPluginEnd()
@@ -49,12 +169,12 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
 	JSONObject jsonObj = view_as<JSONObject>(message);
 
 	char typeBuf[30];
-	jsonObj.GetString("type", typeBuf, sizeof(typeBuf))
+	jsonObj.GetString("type", typeBuf, sizeof(typeBuf));
 	PrintToServer("WebSocket - Command Type: %s", typeBuf);
 	JSONObject payload = view_as<JSONObject>(jsonObj.Get("payload")); // jsonObj.Get() returns a Handle
 
 	char message[64];
-	payload.GetString("message", message, sizeof(message))
+	payload.GetString("message", message, sizeof(message));
 	PrintToServer("ServerAck says: %s", message);
 }
 
