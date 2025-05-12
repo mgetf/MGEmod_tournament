@@ -47,7 +47,7 @@ enum BrowserResponse {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", content = "payload")]
 enum ServerResponse {
-    ServerAck {},
+    ServerAck { message: String },
     TeleportPlayer { steam_id: String },
 }
 

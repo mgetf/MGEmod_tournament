@@ -46,21 +46,16 @@ public void OnPluginEnd()
 
 public void wsReadCallback(WebSocket sock, JSON message, any data)
 {
-	char tsbuf[1000]; //tostring buf
-	message.ToString(tsbuf, sizeof(tsbuf));
+	JSONObject jsonObj = view_as<JSONObject>(message);
 
-	if (StrEqual(tsbuf, "")) {
-		PrintToServer("Empty typed json message");
-		return;
-	}
-
-	// I honestly have no idea how to get a JSONObject from the JSON class. So I have to tostring -> fromstring it.
-	JSONObject msg = new JSONObject();
-	msg = JSONObject.FromString(tsbuf);
 	char typeBuf[30];
-	msg.GetString("type", typeBuf, sizeof(typeBuf));
-    JSONObject payload = view_as<JSONObject>(msg.Get("payload"));
-	PrintToServer("WebSocket - Data: %s", typeBuf);
+	jsonObj.GetString("type", typeBuf, sizeof(typeBuf))
+	PrintToServer("WebSocket - Command Type: %s", typeBuf);
+	JSONObject payload = view_as<JSONObject>(jsonObj.Get("payload")); // jsonObj.Get() returns a Handle
+
+	char message[64];
+	payload.GetString("message", message, sizeof(message))
+	PrintToServer("ServerAck says: %s", message);
 }
 
 public void wsConnCallback(WebSocket sock, any data)

@@ -106,7 +106,9 @@ impl Handler<crate::ServerMsg> for Ladder {
                 
                 // Send acknowledgement back to the server
                 msg.from.do_send(server_ws::ServerResponseMsg {
-                    response: ServerResponse::ServerAck {},
+                    response: ServerResponse::ServerAck {
+                        message: "Server connected".to_string(),
+                    },
                 });
                 self.rerender_all_admins();
             }
