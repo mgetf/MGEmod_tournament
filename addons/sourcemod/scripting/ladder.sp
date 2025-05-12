@@ -17,7 +17,7 @@ public void OnAllPluginsLoaded()
 	PrintToServer("----ladder plugin loaded----");
 
 	char szUrl[256];
-	Format(szUrl, sizeof(szUrl), "ws://b59a-2601-19b-e83-ad70-1449-5006-3b5d-7a3e.ngrok-free.app/endpoint"); // Hardcoded placeholder URL
+	Format(szUrl, sizeof(szUrl), "ws://b59a-2601-19b-e83-ad70-1449-5006-3b5d-7a3e.ngrok-free.app/server_ws"); // Hardcoded placeholder URL
 
 	g_hWebSocket = new WebSocket(szUrl);
 	if (g_hWebSocket == null)

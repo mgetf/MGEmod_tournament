@@ -149,7 +149,6 @@ mod server_ws {
                 Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
                 Ok(ws::Message::Pong(_)) => println!("Pong received"),
                 Ok(ws::Message::Text(text)) => {
-                    println!("Server text received: {}", text);
                     let parsed: Result<ServerCommand, serde_json::Error> = serde_json::from_str(&text);
                     match parsed {
                         Ok(cmd) => {
