@@ -39,16 +39,18 @@ impl StreamHandler<Result<Response<()>, reqwest::Error>> for Ladder {
     }
 }
 
-pub fn update(admin_client_addr: actix::Addr<crate::ServerWs>, new_html_content: String) {
+pub fn update(admin_client_addr: actix::Addr<crate::ServerWs>, new_html_content: Markup) {
     let reply_payload = MessagePayload::IdiomorphUpdate {
         target_id: "app".to_string(),
-        html_content: new_html_content,
+        html_content: new_html_content.into_string(),
     };
     admin_client_addr.do_send(crate::ForwardMessage {
         message: reply_payload,
         from: admin_client_addr.clone(),
     });
 }
+
+use maud::{html, Markup};
 
 impl Handler<crate::ForwardMessage> for Ladder {
     type Result = ();
@@ -61,9 +63,11 @@ impl Handler<crate::ForwardMessage> for Ladder {
 
                 let admin_client_addr = msg.from.clone();
 
-                update(admin_client_addr, format!(
-                    "<div id='app'><h1>Server Acknowledged Init! Morphed Content.</h1></div>",
-                ));
+                update(admin_client_addr, html! {
+                    div #app {
+                        h1 { "Server Acknowledged Init! Morphed Content." }
+                    }
+                });
             }
             MessagePayload::ServerHello {} => {
                 self.servers.push(msg.from);
