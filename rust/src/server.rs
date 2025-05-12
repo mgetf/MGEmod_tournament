@@ -51,14 +51,13 @@ impl Handler<crate::ForwardMessage> for Ladder {
             MessagePayload::Init {} => {
                 self.admin = Some(msg.from.clone());
                 update(msg.from, html! {
-                    div #app {
-                        h1 { "Server Acknowledged Init! Morphed Content." }
-                        button onclick=
-                            { 
-                                (sm(MessagePayload::TeleportPlayer { steamid: "76561198373922918".to_string() }))
-                            }
-                        { "teleport player" }
-                    }
+                    div class="flex flex-col items-center justify-center h-screen" #app {
+                        input class="border-2 border-gray-300 rounded-md p-2" type="text" id="steamid" placeholder="SteamID" {}
+                        button class="bg-blue-500 text-white p-2 rounded-md cursor-pointer" onclick={
+                            "sm({type: 'TeleportPlayer', payload: {steamid: $('#steamid').val()}});"
+                            "$('#steamid').val('');"
+                        } { "teleport yer" }
+                     }
                 });
             }
             MessagePayload::ServerHello {} => {
@@ -68,7 +67,12 @@ impl Handler<crate::ForwardMessage> for Ladder {
                 println!("ServerAck");
             }
             MessagePayload::TeleportPlayer { steamid } => {
-                panic!("TeleportPlayer: {}", steamid);
+                for server in self.servers.iter() { 
+                    server.do_send(crate::ForwardMessage {
+                        message: crate::MessagePayload::TeleportPlayer { steamid: steamid.clone() },
+                        from: msg.from.clone(),
+                    });
+                }
             }
             MessagePayload::Error { message } => {
                 panic!("Error: {}", message);
