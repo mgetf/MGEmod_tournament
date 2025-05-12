@@ -26,19 +26,6 @@ impl Actor for Ladder {
 use crate::MessagePayload;
 use reqwest;
 
-impl StreamHandler<Result<Response<()>, reqwest::Error>> for Ladder {
-    fn handle(&mut self, msg: Result<Response<()>, reqwest::Error>, _ctx: &mut Self::Context) {
-        match msg {
-            Ok(resp) => {
-                println!("got response {:?}", resp);
-            }
-            Err(err) => {
-                println!("got error {:?}", err);
-            }
-        }
-    }
-}
-
 pub fn update(admin_client_addr: actix::Addr<crate::ServerWs>, new_html_content: Markup) {
     let reply_payload = MessagePayload::IdiomorphUpdate {
         target_id: "app".to_string(),
