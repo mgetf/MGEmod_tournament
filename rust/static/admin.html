@@ -15,7 +15,7 @@
       var loc = window.location
 
       const proto = loc.protocol.startsWith('https') ? 'wss' : 'ws'
-      const wsUri = `${proto}://${loc.host}/endpoint`
+      const wsUri = `${proto}://${loc.host}/admin_ws`
 
       socket = new WebSocket(wsUri)
 

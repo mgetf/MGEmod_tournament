@@ -4,7 +4,7 @@ use crate::{admin_ws, server_ws, BrowserCommand, ServerCommand, BrowserResponse,
 const NUM_ARENAS: usize = 16;
 
 pub struct Ladder {
-    admin: Option<actix::Addr<crate::admin_ws::AdminWs>>,
+    admins: Vec<actix::Addr<crate::admin_ws::AdminWs>>,
     servers: Vec<actix::Addr<crate::server_ws::GameServerWs>>,
     players: Vec<crate::Player>,
 }
@@ -12,7 +12,7 @@ pub struct Ladder {
 impl Ladder {
     pub fn new() -> Self {
         Ladder {
-            admin: None,
+            admins: vec![],
             servers: vec![],
             players: vec![],
         }
@@ -43,7 +43,7 @@ impl Handler<crate::BrowserMsg> for Ladder {
     fn handle(&mut self, msg: crate::BrowserMsg, _ctx: &mut Self::Context) {
         match msg.command {
             BrowserCommand::Init {} => {
-                self.admin = Some(msg.from.clone());
+                self.admins.push(msg.from.clone());
                 update_admin(&msg.from, html! {
                     div class="flex flex-col items-center justify-center h-screen" #app {
                         input class="border-2 border-gray-300 rounded-md p-2" type="text" #steamid placeholder="SteamID" {}
