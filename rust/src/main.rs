@@ -9,7 +9,6 @@ use actix_web::{
 };
 use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
-mod challonge;
 mod server;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -22,60 +21,24 @@ struct Player {
 #[serde(tag = "type", content = "payload")]
 enum MessagePayload {
     // receiving
-    ServerHello {
-        apiKey: String,
-        serverNum: String,
-        serverHost: String,
-        serverPort: String,
-        stvPort: String,
-    },
+    ServerHello { },
     // sending
-    MatchDetails {
-        arenaId: i32,
-        p1Id: String,
-        p2Id: String,
-    },
-    MatchBegan {
-        p1Id: String,
-        p2Id: String,
-    },
-    TournamentStart {},
-    TournamentStop {},
-    MatchResults {
-        winner: String,
-        loser: String,
-        finished: bool,
-        arena: i32,
-    },
-    MatchCancel {
-        delinquents: Vec<String>,
-        arrived: String,
-        arena: i32,
-    },
-    UsersInServer {
-        players: Vec<Player>,
-    },
+    ServerAck { },
     Error {
         message: String,
-    },
-    SetMatchScore {
-        arenaId: i32,
-        p1Score: i32,
-        p2Score: i32,
     },
 }
 
 struct AppState {
-    app_name: String,
-    tournment: actix::Addr<server::Tournament>,
+    ladder: actix::Addr<server::Ladder>,
 }
 
-use crate::server::Tournament;
+use crate::server::Ladder;
 use actix::prelude::*;
 
 // https://github.com/actix/examples/blob/master/websockets/chat/src/server.rs
 struct ServerWs {
-    addr: Addr<Tournament>,
+    addr: Addr<Ladder>,
 }
 impl Actor for ServerWs {
     type Context = ws::WebsocketContext<Self>;
@@ -134,7 +97,7 @@ async fn server_route(
     data: web::Data<AppState>,
     stream: web::Payload,
 ) -> Result<HttpResponse, Error> {
-    let t: &actix::Addr<server::Tournament> = &data.tournment;
+    let t: &actix::Addr<server::Ladder> = &data.ladder;
 
     let resp = ws::start(ServerWs { addr: t.clone() }, &req, stream);
     println!("server!!! {:?}", resp);
@@ -154,31 +117,18 @@ use actix_web::rt::task;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // read api_key.txt
-    let api_key = std::fs::read_to_string("api_key.txt").unwrap();
-    let c = challonge::Challonge::new("tommylt3", &api_key.trim());
-    let tournament = Tournament::new(c).start();
+    let ladder = Ladder::new().start();
 
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(AppState {
-                app_name: String::from("Actix-web"),
-                tournment: tournament.clone(),
+                ladder: ladder.clone(),
             }))
-            .route("/tf2serverep", web::get().to(server_route))
+            .route("/endpoint", web::get().to(server_route))
             .route("/admin", web::get().to(admin))
             .route("/", web::get().to(index))
     })
-    .bind(("0.0.0.0", 8080))?
+    .bind(("0.0.0.0", 8083))?
     .run()
     .await
 }
-
-// fn main() {
-//     let c = challonge_api::Challonge::new("tommylt3", crate::challonge::API_KEY);
-//     let tid = challonge_api::TournamentId::Url(
-//         crate::challonge::SUBDOMAIN.to_string(),
-//         "mge2".to_string(),
-//     );
-
-//     crate::challonge::get_matches(&tid);
-// }
