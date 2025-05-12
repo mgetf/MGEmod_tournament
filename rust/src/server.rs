@@ -1,4 +1,5 @@
 use actix::prelude::*;
+use crate::ForwardMessage;
 
 const NUM_ARENAS: usize = 16;
 
@@ -38,11 +39,15 @@ impl StreamHandler<Result<Response<()>, reqwest::Error>> for Ladder {
     }
 }
 
+
 impl Handler<crate::ForwardMessage> for Ladder {
     type Result = ();
 
-    fn handle(&mut self, msg: crate::ForwardMessage, _ctx: &mut Self::Context) {
+    fn handle(&mut self, msg: ForwardMessage, _ctx: &mut Self::Context) {
         match msg.message {
+            MessagePayload::Init { } => {
+                self.admin = Some(msg.from.clone());
+            }
             MessagePayload::ServerHello { } => {
                 self.servers.push(msg.from);
             }

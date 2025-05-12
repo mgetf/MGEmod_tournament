@@ -22,6 +22,7 @@ struct Player {
 enum MessagePayload {
     // receiving
     ServerHello { },
+    Init { },
     // sending
     ServerAck { },
     Error {

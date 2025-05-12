@@ -3,249 +3,38 @@
   <head>
     <meta charset="utf-8" />
     <title>Chat!</title>
-
-    <style>
-      :root {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-          Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-        font-size: 18px;
-      }
-
-      input[type='text'] {
-        font-size: inherit;
-      }
-
-      #log {
-        width: 30em;
-        height: 20em;
-        overflow: auto;
-        margin: 0.5em 0;
-
-        border: 1px solid black;
-      }
-
-      #status {
-        padding: 0 0.2em;
-      }
-
-      #text {
-        width: 17em;
-        padding: 0.5em;
-      }
-
-      .msg {
-        margin: 0;
-        padding: 0.25em 0.5em;
-      }
-
-      .msg--status {
-        /* a light yellow */
-        background-color: #ffffc9;
-      }
-
-      .msg--message {
-        /* a light blue */
-        background-color: #d2f4ff;
-      }
-
-      .msg--error {
-        background-color: pink;
-      }
-    </style>
+    <script src="https://unpkg.com/idiomorph@0.7.3"></script>
   </head>
 
   <body>
-    <h1>Chat!</h1>
-
-    <div>
-      <button id="connect">Connect</button>
-      <span>Status:</span>
-      <span id="status">disconnected</span>
-    </div>
-
-    <div id="log"></div>
-
-    <form id="chatform">
-      <input type="text" id="text" />
-      <input type="submit" id="send" />
-    </form>
-
-    <button id="debug0">SetArenaScore</button>
-
-    <hr />
-    <button id="debug1">simulate connect</button>
-    <button id="debug2">TournamentStart request</button>
-    <button id="debug3">UsersInServer response</button>
-
-    <br/>
-    <button id="debug4">MatchDetails with tommy</button>
-    <br/>
-    <button id="debug5">MatchBegan</button>
-    <br/>
-    <button id="debug6">MatchResults</button>
-
-
-    <button id="debug7">TournamentStop</button>
-
     <script>
-      const $status = document.querySelector('#status')
-      const $connectButton = document.querySelector('#connect')
-      const $log = document.querySelector('#log')
-      const $form = document.querySelector('#chatform')
-      const $input = document.querySelector('#text')
-      const $debug0 = document.querySelector('#debug0')
-      const $debug1 = document.querySelector('#debug1')
-      const $debug2 = document.querySelector('#debug2')
-      const $debug3 = document.querySelector('#debug3')
-      const $debug4 = document.querySelector('#debug4')
-      const $debug5 = document.querySelector('#debug5')
-      const $debug6 = document.querySelector('#debug6')
-      const $debug7 = document.querySelector('#debug7')
-
-      /** @type {WebSocket | null} */
       var socket = null
 
-      function log(msg, type = 'status') {
-        $log.innerHTML += `<p class="msg msg--${type}">${msg}</p>`
-        $log.scrollTop += 1000
+      var loc = window.location
+
+      const proto = loc.protocol.startsWith('https') ? 'wss' : 'ws'
+      const wsUri = `${proto}://${loc.host}/endpoint`
+
+      socket = new WebSocket(wsUri)
+
+      socket.onopen = () => {
+        console.log('Connected')
       }
 
-      function connect() {
-        disconnect()
-
-        const { location } = window
-
-        const proto = location.protocol.startsWith('https') ? 'wss' : 'ws'
-        const wsUri = `${proto}://${location.host}/tf2serverep`
-
-        log('Connecting...')
-        socket = new WebSocket(wsUri)
-
-        socket.onopen = () => {
-          log('Connected')
-          updateConnectionStatus()
-        }
-
-        socket.onmessage = (ev) => {
-          log('Received: ' + ev.data, 'message')
-        }
-
-        socket.onclose = () => {
-          log('Disconnected')
-          socket = null
-          updateConnectionStatus()
-        }
+      socket.onmessage = ({target, newnode}) => {
+        const node = document.getElementById(target)
+        Idiomorph.morph(node, newnode)
       }
 
-      function disconnect() {
-        if (socket) {
-          log('Disconnecting...')
-          socket.close()
-          socket = null
-
-          updateConnectionStatus()
-        }
+      socket.onclose = () => {
+        console.log('Disconnected')
+        socket = null
       }
 
-      function updateConnectionStatus() {
-        if (socket) {
-          $status.style.backgroundColor = 'transparent'
-          $status.style.color = 'green'
-          $status.textContent = `connected`
-          $connectButton.innerHTML = 'Disconnect'
-          $input.focus()
-        } else {
-          $status.style.backgroundColor = 'red'
-          $status.style.color = 'white'
-          $status.textContent = 'disconnected'
-          $connectButton.textContent = 'Connect'
-        }
-      }
-
-      $connectButton.addEventListener('click', () => {
-        if (socket) {
-          disconnect()
-        } else {
-          connect()
-        }
-
-        updateConnectionStatus()
-      })
-
-      $form.addEventListener('submit', (ev) => {
-        ev.preventDefault()
-
-        const text = $input.value
-
-        log('Sending: ' + text)
-        socket.send(text)
-
-        $input.value = ''
-        $input.focus()
-      })
-
-      $debug0.addEventListener('click', () => {
-        const text = JSON.stringify({"type": "SetMatchScore", "payload": {"arenaId": 0, "p1Score": 5, "p2Score": 10}}) 
-        $input.value = text
-      })
-
-      $debug1.addEventListener('click', () => {
-        const text = JSON.stringify({"type": "ServerHello", "payload": {"apiKey": "admin", "serverNum": "1", "serverHost": "", "serverPort": "27015", "stvPort": ""}}) 
-        log('sent ' + text)
-        socket.send(text)
-      })
-
-      $debug2.addEventListener('click', () => {
-        const text =JSON.stringify({"type": "TournamentStart", 
-                                    "payload": {}}) 
-        log('sent ' + text)
-        socket.send(text)
-      })
-
-      $debug3.addEventListener('click', () => {
-        const text =JSON.stringify({"type": "UsersInServer", 
-                                    "payload": {"players": [
-                                      {steamId: "76561198041183975", name: "tommy"}, 
-                                      {steamId: "76561198306912450", name: "cutx"}]}}) 
-        log('sent ' + text)
-        socket.send(text)
-      })
-
-      $debug4.addEventListener('click', () => {
-        const text =JSON.stringify(
-          {"type": "MatchDetails", 
-           "payload": {arenaId: 4, 
-                        p1Id: "76561198041183975", 
-                        p2Id: "76561198306912450"}}) 
-        log('sent ' + text)
-        socket.send(text)
-      })
-      $debug5.addEventListener('click', () => {
-        const text =JSON.stringify(
-          {"type": "MatchBegan", 
-           "payload": { p1Id: "76561198041183975", 
-                        p2Id: "76561198306912450"}}) 
-        log('sent ' + text)
-        socket.send(text)
-      })
-      $debug6.addEventListener('click', () => {
-        const text =JSON.stringify(
-          {"type": "MatchResults", 
-           "payload": { winner: "76561198041183975", 
-                        loser: "76561198306912450",
-                        finished: true}}) 
-        log('sent ' + text)
-        socket.send(text)
-      })
-      $debug7.addEventListener('click', () => {
-        const text =JSON.stringify(
-          {"type": "TournamentStop", 
-           "payload": {}}) 
-        log('sent ' + text)
-        socket.send(text)
-      })
-      updateConnectionStatus()
-
+      function sm(o) { socket.send(JSON.stringify(o)) }
     </script>
+    <button id="send" onclick="sm({type: 'Init', payload: {}})">Send</button>
+    <div id="app">
+    </div>
   </body>
 </html>
