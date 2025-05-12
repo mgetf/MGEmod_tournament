@@ -1,5 +1,5 @@
-use actix::prelude::*;
 use crate::ForwardMessage;
+use actix::prelude::*;
 
 const NUM_ARENAS: usize = 16;
 
@@ -39,13 +39,12 @@ impl StreamHandler<Result<Response<()>, reqwest::Error>> for Ladder {
     }
 }
 
-
 impl Handler<crate::ForwardMessage> for Ladder {
     type Result = ();
 
     fn handle(&mut self, msg: ForwardMessage, ctx: &mut Self::Context) {
         match msg.message {
-            MessagePayload::Init { } => {
+            MessagePayload::Init {} => {
                 self.admin = Some(msg.from.clone());
                 println!("Admin initialized. Replying with IdiomorphUpdate.");
 
@@ -53,20 +52,24 @@ impl Handler<crate::ForwardMessage> for Ladder {
 
                 let reply_payload = MessagePayload::IdiomorphUpdate {
                     target_id: "app".to_string(),
-                    html_content: "<h1>Server Acknowledged Init! Morphed Content.</h1>".to_string(),
+                    html_content: format!(
+                        "<div id='app'><h1>Server Acknowledged Init! Morphed Content.</h1></div>",
+                    ),
                 };
-
                 admin_client_addr.do_send(crate::ForwardMessage {
                     message: reply_payload,
                     from: msg.from.clone(), // is this right?
                 });
             }
-            MessagePayload::ServerHello { } => {
+            MessagePayload::ServerHello {} => {
                 self.servers.push(msg.from);
             }
-            MessagePayload::ServerAck { } => { }
-            MessagePayload::Error { message } => { }
-            MessagePayload::IdiomorphUpdate { target_id, html_content } => { }
+            MessagePayload::ServerAck {} => {}
+            MessagePayload::Error { message } => {}
+            MessagePayload::IdiomorphUpdate {
+                target_id,
+                html_content,
+            } => {}
         }
     }
 }

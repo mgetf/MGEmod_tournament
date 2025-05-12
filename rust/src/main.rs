@@ -21,10 +21,10 @@ struct Player {
 #[serde(tag = "type", content = "payload")]
 enum MessagePayload {
     // receiving
-    ServerHello { },
-    Init { },
+    ServerHello {},
+    Init {},
     // sending
-    ServerAck { },
+    ServerAck {},
     Error {
         message: String,
     },
