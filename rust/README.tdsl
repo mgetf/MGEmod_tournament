@@ -1,0 +1,29 @@
+overreporting matches
+
+finishing a match when tournament mode is disabled, is broken
+
+
+
+{"type": "ServerHello", "payload": {"apiKey": "", "serverNum": "1", "serverHost": "", "serverPort": "27015", "stvPort": ""}}
+{"type": "MatchCancel", "payload": {"delinquents": ["1", "2"], "arrived": "", "arena": 1}}
+{"type": "MatchResults", "payload": {"winner": "76561198041183975", "loser": "76561198306912450", "finished": true}}
+{"type": "UsersInServer", "payload": {"players": [{"steamId": "STEAM_ID_STOP_IGNORING_RETVALS", "name": "awesom"}]}}
+
+ServerHello
+TournamentStart/UsersInServer (goes into tournament mode (all spec, only added ppl allowwed))
+--challonge business
+loop {
+    MatchBegan
+    MatchStart (initiates matches according to challonge)
+    MatchResults
+    -- challonge business
+}
+TournamentFinished
+
+{{{{{}}}}}
+TODO: debug why this is sending me to the arena with someone when it should error. where is it getting that other steamid?
+Text received: {"type": "UsersInServer", "payload": {"players": [{"steamId": "76561198041183975", "name": "awesom"}]}}
+recieved players [Player { steamId: "76561198041183975", name: "awesom" }]
+adding player "awesom"
+Forwarding message: MatchDetails { arenaId: 0, p1Id: "76561198306912450", p2Id: "76561198041183975" }
+Forwarding message: MatchDetails { arenaId: 1, p1Id: "76561198306912450", p2Id: "76561198041183975" }

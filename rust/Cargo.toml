@@ -1,0 +1,19 @@
+[package]
+name = "rustmge"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+challonge = "0.5.4"
+chrono = "0.4.34"
+actix-web = "4"
+actix = "0.13.3"
+actix-web-actors = "4.3.0"
+actix-files = "0.6.5"
+serde = { version = "1.0.196", features = ["derive"] }
+serde_json = "1.0.113"
+reqwest = { version = "0.11", features = ["json"] }
+
+
