@@ -21,6 +21,10 @@ impl Ladder {
     pub fn render_admin_ui(&self) -> Markup {
         html! {
             div class="flex flex-col items-center justify-center h-screen" #app {
+                h1 class="text-2xl font-bold" { "Players" }
+                @for player in self.players.iter() {
+                    p { (format!("{:?}", player)) }
+                }
                 h1 class="text-2xl font-bold" { "Servers" }
                 @for server in self.servers.iter() {
                     p { (format!("{:?}", server)) }
@@ -88,8 +92,12 @@ impl Handler<crate::ServerMsg> for Ladder {
 
     fn handle(&mut self, msg: crate::ServerMsg, _ctx: &mut Self::Context) {
         match msg.command {
-            ServerCommand::PlayerJoined { steam_id, name } => {
+            ServerCommand::PlayerConnected { steam_id, name } => {
                 self.players.push(crate::Player { steam_id, name });
+                self.rerender_all_admins();
+            }
+            ServerCommand::PlayerDisconnected { steam_id } => {
+                self.players.retain(|player| player.steam_id != steam_id);
                 self.rerender_all_admins();
             }
             ServerCommand::ServerHello {} => {

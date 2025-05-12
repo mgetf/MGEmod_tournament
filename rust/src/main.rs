@@ -32,14 +32,14 @@ enum BrowserCommand {
 #[serde(tag = "type", content = "payload")]
 enum ServerCommand {
     ServerHello {},
-    PlayerJoined { steam_id: String, name: String },
+    PlayerConnected { steam_id: String, name: String },
+    PlayerDisconnected { steam_id: String },
 }
 
 // Responses to browsers
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", content = "payload")]
 enum BrowserResponse {
-    Error { message: String },
     IdiomorphUpdate { target_id: String, html_content: String },
 }
 
@@ -49,7 +49,6 @@ enum BrowserResponse {
 enum ServerResponse {
     ServerAck {},
     TeleportPlayer { steam_id: String },
-    Error { message: String },
 }
 
 struct AppState {
@@ -124,11 +123,7 @@ mod admin_ws {
                             });
                         }
                         Err(e) => {
-                            let error_resp = BrowserResponse::Error {
-                                message: e.to_string(),
-                            };
-                            let st = serde_json::to_string(&error_resp).unwrap();
-                            ctx.text(st);
+                            println!("error: {}", e);
                         }
                     }
                 }
@@ -195,11 +190,7 @@ mod server_ws {
                             });
                         }
                         Err(e) => {
-                            let error_resp = ServerResponse::Error {
-                                message: e.to_string(),
-                            };
-                            let st = serde_json::to_string(&error_resp).unwrap();
-                            ctx.text(st);
+                            println!("error: {}", e);
                         }
                     }
                 }

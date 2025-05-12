@@ -121,3 +121,28 @@ public void OnClientPostAdminCheck(int client)
 
 	g_hWebSocket.WriteString(send);
 }
+
+
+/* OnClientDisconnect(client)
+*
+* When a client disconnects from the server.
+* Client-specific timers are killed here.
+* -------------------------------------------------------------------------- */
+public void OnClientDisconnect(int client)
+{
+	JSONObject msg = new JSONObject();
+	msg.SetString("type", "PlayerDisconnected");
+
+    JSONObject payload = new JSONObject();
+
+	char player_64[50];
+	GetClientAuthId(client, AuthId_SteamID64, player_64, sizeof(player_64));
+	payload.SetString("steam_id", player_64);
+
+	msg.Set("payload", payload);
+
+	char send[3000];
+	msg.ToString(send, sizeof(send));
+
+	g_hWebSocket.WriteString(send);
+}
