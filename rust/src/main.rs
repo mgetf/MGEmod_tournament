@@ -15,7 +15,7 @@ mod server;
 
 #[derive(Clone)]
 struct Player {
-    steamId: String,
+    steam_id: String,
     name: String,
 }
 
@@ -24,7 +24,7 @@ struct Player {
 #[serde(tag = "type", content = "payload")]
 enum BrowserCommand {
     Init {},
-    TeleportPlayer { steamid: String },
+    TeleportPlayer { steam_id: String },
 }
 
 // Server-specific messages
@@ -32,6 +32,7 @@ enum BrowserCommand {
 #[serde(tag = "type", content = "payload")]
 enum ServerCommand {
     ServerHello {},
+    PlayerJoined { steam_id: String, name: String },
 }
 
 // Responses to browsers
@@ -47,7 +48,7 @@ enum BrowserResponse {
 #[serde(tag = "type", content = "payload")]
 enum ServerResponse {
     ServerAck {},
-    TeleportPlayer { steamid: String },
+    TeleportPlayer { steam_id: String },
     Error { message: String },
 }
 

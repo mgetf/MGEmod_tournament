@@ -92,3 +92,32 @@ public void wsDisconnCallback(WebSocket sock, any data)
     PrintToServer("disconnected from ws, retrying");
     CreateTimer(5.0, Timer_ConnectToLadder, 0);
 }
+
+//------------------------ ingame events
+/* OnClientPostAdminCheck(client)
+ *
+ * Called once a client is fully in-game, and authorized with Steam.
+ * Client-specific variables are initialized here.
+ * -------------------------------------------------------------------------- */
+public void OnClientPostAdminCheck(int client)
+{
+	JSONObject msg = new JSONObject();
+	msg.SetString("type", "PlayerConnected");
+
+    JSONObject payload = new JSONObject();
+
+	char player_64[50];
+	GetClientAuthId(client, AuthId_SteamID64, player_64, sizeof(player_64));
+	payload.SetString("steam_id", player_64);
+
+	char client_name[MAX_NAME_LENGTH];
+	GetClientName(client, client_name, sizeof(client_name));
+	payload.SetString("name", client_name);
+
+	msg.Set("payload", payload);
+
+	char send[3000];
+	msg.ToString(send, sizeof(send));
+
+	g_hWebSocket.WriteString(send);
+}

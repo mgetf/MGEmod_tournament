@@ -32,7 +32,7 @@ impl Ladder {
                 h1 class="text-2xl font-bold" { "Ladder" }
                 input class="border-2 border-gray-300 rounded-md p-2" type="text" #steamid placeholder="SteamID" {}
                 button class="bg-blue-500 text-white p-2 rounded-md cursor-pointer" onclick={
-                    "sm({type: 'TeleportPlayer', payload: {steamid: $('#steamid').val()}});"
+                    "sm({type: 'TeleportPlayer', payload: {steam_id: $('#steamid').val()}});"
                     "$('#steamid').val('');"
                 } { "teleport here" }
             }
@@ -71,10 +71,10 @@ impl Handler<crate::BrowserMsg> for Ladder {
                 self.admins.push(msg.from.clone());
                 update_admin(&msg.from, self.render_admin_ui());
             }
-            BrowserCommand::TeleportPlayer { steamid } => {
+            BrowserCommand::TeleportPlayer { steam_id } => {
                 for server in self.servers.iter() {
                     server.do_send(server_ws::ServerResponseMsg {
-                        response: ServerResponse::TeleportPlayer { steamid: steamid.clone() },
+                        response: ServerResponse::TeleportPlayer { steam_id: steam_id.clone() },
                     });
                 }
             }
@@ -88,6 +88,10 @@ impl Handler<crate::ServerMsg> for Ladder {
 
     fn handle(&mut self, msg: crate::ServerMsg, _ctx: &mut Self::Context) {
         match msg.command {
+            ServerCommand::PlayerJoined { steam_id, name } => {
+                self.players.push(crate::Player { steam_id, name });
+                self.rerender_all_admins();
+            }
             ServerCommand::ServerHello {} => {
                 // Add the server to our list
                 self.servers.push(msg.from.clone());
