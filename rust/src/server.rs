@@ -1,8 +1,7 @@
 use actix::prelude::*;
 use crate::{admin_ws, server_ws, BrowserCommand, ServerCommand, BrowserResponse, ServerResponse};
 use crate::{AdminDisconnected, ServerDisconnected};
-
-const NUM_ARENAS: usize = 16;
+use maud::{html, Markup};
 
 pub struct Ladder {
     admins: Vec<actix::Addr<crate::admin_ws::AdminWs>>,
@@ -16,6 +15,33 @@ impl Ladder {
             admins: vec![],
             servers: vec![],
             players: vec![],
+        }
+    }
+
+    pub fn render_admin_ui(&self) -> Markup {
+        html! {
+            div class="flex flex-col items-center justify-center h-screen" #app {
+                h1 class="text-2xl font-bold" { "Servers" }
+                @for server in self.servers.iter() {
+                    p { (format!("{:?}", server)) }
+                }
+                h1 class="text-2xl font-bold" { "Admins" }
+                @for admin in self.admins.iter() {
+                    p { (format!("{:?}", admin)) }
+                }
+                h1 class="text-2xl font-bold" { "Ladder" }
+                input class="border-2 border-gray-300 rounded-md p-2" type="text" #steamid placeholder="SteamID" {}
+                button class="bg-blue-500 text-white p-2 rounded-md cursor-pointer" onclick={
+                    "sm({type: 'TeleportPlayer', payload: {steamid: $('#steamid').val()}});"
+                    "$('#steamid').val('');"
+                } { "teleport here" }
+            }
+        }
+    }
+
+    pub fn rerender_all_admins(&self) {
+        for admin in self.admins.iter() {
+            update_admin(admin, self.render_admin_ui());
         }
     }
 }
@@ -35,8 +61,6 @@ pub fn update_admin(admin_client_addr: &actix::Addr<crate::admin_ws::AdminWs>, n
     });
 }
 
-use maud::{html, Markup};
-
 // Handle browser commands
 impl Handler<crate::BrowserMsg> for Ladder {
     type Result = ();
@@ -45,15 +69,7 @@ impl Handler<crate::BrowserMsg> for Ladder {
         match msg.command {
             BrowserCommand::Init {} => {
                 self.admins.push(msg.from.clone());
-                update_admin(&msg.from, html! {
-                    div class="flex flex-col items-center justify-center h-screen" #app {
-                        input class="border-2 border-gray-300 rounded-md p-2" type="text" #steamid placeholder="SteamID" {}
-                        button class="bg-blue-500 text-white p-2 rounded-md cursor-pointer" onclick={
-                            "sm({type: 'TeleportPlayer', payload: {steamid: $('#steamid').val()}});"
-                            "$('#steamid').val('');"
-                        } { "teleport yer" }
-                     }
-                });
+                update_admin(&msg.from, self.render_admin_ui());
             }
             BrowserCommand::TeleportPlayer { steamid } => {
                 for server in self.servers.iter() {
@@ -80,6 +96,7 @@ impl Handler<crate::ServerMsg> for Ladder {
                 msg.from.do_send(server_ws::ServerResponseMsg {
                     response: ServerResponse::ServerAck {},
                 });
+                self.rerender_all_admins();
             }
         }
     }
@@ -93,6 +110,7 @@ impl Handler<AdminDisconnected> for Ladder {
         println!("Removing disconnected admin");
         // Remove the disconnected admin from the list
         self.admins.retain(|admin| admin != &msg.addr);
+        self.rerender_all_admins();
     }
 }
 
@@ -104,5 +122,6 @@ impl Handler<ServerDisconnected> for Ladder {
         println!("Removing disconnected server");
         // Remove the disconnected server from the list
         self.servers.retain(|server| server != &msg.addr);
+        self.rerender_all_admins();
     }
 }

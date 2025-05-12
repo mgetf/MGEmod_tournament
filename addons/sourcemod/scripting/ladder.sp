@@ -60,7 +60,7 @@ public void wsReadCallback(WebSocket sock, JSON message, any data)
 	char typeBuf[30];
 	msg.GetString("type", typeBuf, sizeof(typeBuf));
     JSONObject payload = view_as<JSONObject>(msg.Get("payload"));
-	PrintToServer("WebSocket - Data: %s", payload);
+	PrintToServer("WebSocket - Data: %s", typeBuf);
 }
 
 public void wsConnCallback(WebSocket sock, any data)

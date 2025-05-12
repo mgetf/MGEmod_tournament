@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 mod server;
 
 #[derive(Debug, Deserialize, Serialize)]
+
+#[derive(Clone)]
 struct Player {
     steamId: String,
     name: String,
@@ -264,8 +266,6 @@ async fn admin() -> impl Responder {
 async fn index() -> impl Responder {
     NamedFile::open_async("./static/index.html").await.unwrap()
 }
-
-use actix_web::rt::task;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
