@@ -23,6 +23,9 @@ enum MessagePayload {
     // receiving
     ServerHello {},
     Init {},
+    TeleportPlayer {
+        steamid: String,
+    },
     // sending
     ServerAck {},
     Error {

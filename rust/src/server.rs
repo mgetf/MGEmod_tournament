@@ -36,6 +36,10 @@ pub fn update(admin_client_addr: actix::Addr<crate::ServerWs>, new_html_content:
         from: admin_client_addr.clone(),
     });
 }
+pub fn sm(o: MessagePayload) -> String {
+    let json = serde_json::to_string(&o).unwrap();
+    format!("sm({})", json)
+}
 
 use maud::{html, Markup};
 
@@ -49,18 +53,32 @@ impl Handler<crate::ForwardMessage> for Ladder {
                 update(msg.from, html! {
                     div #app {
                         h1 { "Server Acknowledged Init! Morphed Content." }
+                        button onclick=
+                            { 
+                                (sm(MessagePayload::TeleportPlayer { steamid: "76561198373922918".to_string() }))
+                            }
+                        { "teleport player" }
                     }
                 });
             }
             MessagePayload::ServerHello {} => {
                 self.servers.push(msg.from);
             }
-            MessagePayload::ServerAck {} => {}
-            MessagePayload::Error { message } => {}
+            MessagePayload::ServerAck {} => {
+                println!("ServerAck");
+            }
+            MessagePayload::TeleportPlayer { steamid } => {
+                panic!("TeleportPlayer: {}", steamid);
+            }
+            MessagePayload::Error { message } => {
+                panic!("Error: {}", message);
+            }
             MessagePayload::IdiomorphUpdate {
                 target_id,
                 html_content,
-            } => {}
+            } => {
+                panic!("IdiomorphUpdate: {} {}", target_id, html_content);
+            }
         }
     }
 }
