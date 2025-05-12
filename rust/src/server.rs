@@ -59,11 +59,7 @@ impl Handler<crate::ForwardMessage> for Ladder {
         match msg.message {
             MessagePayload::Init {} => {
                 self.admin = Some(msg.from.clone());
-                println!("Admin initialized. Replying with IdiomorphUpdate.");
-
-                let admin_client_addr = msg.from.clone();
-
-                update(admin_client_addr, html! {
+                update(msg.from, html! {
                     div #app {
                         h1 { "Server Acknowledged Init! Morphed Content." }
                     }
