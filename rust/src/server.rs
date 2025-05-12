@@ -1,5 +1,6 @@
 use actix::prelude::*;
 use crate::{admin_ws, server_ws, BrowserCommand, ServerCommand, BrowserResponse, ServerResponse};
+use crate::{AdminDisconnected, ServerDisconnected};
 
 const NUM_ARENAS: usize = 16;
 
@@ -81,5 +82,27 @@ impl Handler<crate::ServerMsg> for Ladder {
                 });
             }
         }
+    }
+}
+
+// Handle admin disconnections
+impl Handler<AdminDisconnected> for Ladder {
+    type Result = ();
+
+    fn handle(&mut self, msg: AdminDisconnected, _ctx: &mut Self::Context) {
+        println!("Removing disconnected admin");
+        // Remove the disconnected admin from the list
+        self.admins.retain(|admin| admin != &msg.addr);
+    }
+}
+
+// Handle server disconnections
+impl Handler<ServerDisconnected> for Ladder {
+    type Result = ();
+
+    fn handle(&mut self, msg: ServerDisconnected, _ctx: &mut Self::Context) {
+        println!("Removing disconnected server");
+        // Remove the disconnected server from the list
+        self.servers.retain(|server| server != &msg.addr);
     }
 }

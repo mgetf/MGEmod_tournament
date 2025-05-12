@@ -72,6 +72,19 @@ struct ServerMsg {
     from: Addr<server_ws::GameServerWs>,
 }
 
+// Disconnect notification messages
+#[derive(Message)]
+#[rtype(result = "()")]
+struct AdminDisconnected {
+    addr: Addr<admin_ws::AdminWs>,
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct ServerDisconnected {
+    addr: Addr<server_ws::GameServerWs>,
+}
+
 // Admin WebSocket handler
 mod admin_ws {
     use super::*;
@@ -82,6 +95,14 @@ mod admin_ws {
 
     impl Actor for AdminWs {
         type Context = ws::WebsocketContext<Self>;
+
+        fn stopped(&mut self, _ctx: &mut Self::Context) {
+            // Notify the ladder that this admin has disconnected
+            self.ladder.do_send(AdminDisconnected {
+                addr: _ctx.address(),
+            });
+            println!("Admin websocket connection closed");
+        }
     }
 
     impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for AdminWs {
@@ -109,6 +130,10 @@ mod admin_ws {
                     }
                 }
                 Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
+                Ok(ws::Message::Close(reason)) => {
+                    println!("Admin websocket closing: {:?}", reason);
+                    ctx.close(reason);
+                },
                 _ => (),
             }
         }
@@ -141,6 +166,14 @@ mod server_ws {
 
     impl Actor for GameServerWs {
         type Context = ws::WebsocketContext<Self>;
+
+        fn stopped(&mut self, _ctx: &mut Self::Context) {
+            // Notify the ladder that this server has disconnected
+            self.ladder.do_send(ServerDisconnected {
+                addr: _ctx.address(),
+            });
+            println!("Server websocket connection closed");
+        }
     }
 
     impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for GameServerWs {
@@ -168,6 +201,10 @@ mod server_ws {
                     }
                 }
                 Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
+                Ok(ws::Message::Close(reason)) => {
+                    println!("Server websocket closing: {:?}", reason);
+                    ctx.close(reason);
+                },
                 _ => (),
             }
         }
