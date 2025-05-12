@@ -52,7 +52,7 @@ impl Handler<crate::ForwardMessage> for Ladder {
                 self.admin = Some(msg.from.clone());
                 update(msg.from, html! {
                     div class="flex flex-col items-center justify-center h-screen" #app {
-                        input class="border-2 border-gray-300 rounded-md p-2" type="text" id="steamid" placeholder="SteamID" {}
+                        input class="border-2 border-gray-300 rounded-md p-2" type="text" #steamid placeholder="SteamID" {}
                         button class="bg-blue-500 text-white p-2 rounded-md cursor-pointer" onclick={
                             "sm({type: 'TeleportPlayer', payload: {steamid: $('#steamid').val()}});"
                             "$('#steamid').val('');"
